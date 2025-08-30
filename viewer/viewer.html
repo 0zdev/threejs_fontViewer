@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-T">
+    <title>Three.js Viewer</title>
+    
+    <style>
+        /* Basic styles to make the canvas fill the entire iframe */
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: transparent;
+        }
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+
+    <script id="viewer-script-threejs-url" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script type="module" src="viewer/viewer.js"></script>
+</body>
+</html> 

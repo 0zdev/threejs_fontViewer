@@ -1,0 +1,714 @@
+/* --- GLOBAL STYLES & THEME VARIABLES --- */
+:root {
+    /* Light Theme (Base) */
+    --color-bg-light: #f8f9fa;
+    --color-bg-dark: #ffffff;
+    --color-border: #e1e5e9;
+    --color-accent: #0066cc;
+    --color-accent2: #04596a;
+    --color-text: #2d2d2d;
+    --color-text-light: #666666;
+    --color-editor-bg: #fafbfc;
+    --color-canvas-bg: #f8f9fa;
+    --color-error: #d9534f;
+    --toast-bg-color: rgba(45, 45, 45, 0.9);
+}
+
+[data-theme="dark"] {
+    --color-bg-light: #1a1a1a;
+    --color-bg-dark: #2d2d2d;
+    --color-border: #404040;
+    --color-accent: #64b5f6;
+    --color-accent2: #0077fe;
+    --color-text: #ffffff;
+    --color-text-light: #cccccc;
+    --color-editor-bg: #1e1e1e;
+    --color-canvas-bg: #1a1a1a;
+    --color-error: #ff8b52;
+    --toast-bg-color: rgba(26, 26, 26, 0.9);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--color-bg-light);
+    color: var(--color-text);
+    height: 100vh;
+    overflow: hidden;
+    transition: background 0.3s ease;
+}
+/* --- END GLOBAL STYLES & THEME VARIABLES --- */
+
+
+/* --- SCROLLBAR STYLES --- */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-text-light);
+    border-radius: 10px;
+    opacity: 0.5;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: #555;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+}
+/* --- END SCROLLBAR STYLES --- */
+
+
+/* --- MAIN LAYOUT CONTAINERS --- */
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+}
+
+.panel {
+    background: var(--color-bg-dark);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-panel {
+    background: var(--color-editor-bg);
+    min-width: 150px;
+    width: 50%;
+}
+
+.viewer-panel {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+}
+/* --- END MAIN LAYOUT CONTAINERS --- */
+
+
+/* --- SIDEBAR --- */
+.sidebar {
+    width: 60px;
+    background: var(--color-bg-dark);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 8px;
+    gap: 8px;
+}
+
+.sidebar-logo {
+    margin-top: auto;
+    margin-bottom: 35px;
+    color: var(--color-accent);
+    font-family: 'Roboto Mono', monospace;
+    white-space: pre;
+    transform: rotate(-90deg) translateX(-50%) translateY(-15px);
+    transform-origin: center;
+}
+
+.sidebar-logo .logo-main {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.sidebar-logo .logo-sub {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-left: 2px;
+}
+
+.sidebar-btn {
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-dark);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-light);
+    transition: all 0.2s;
+}
+
+.sidebar-btn:hover {
+    background: var(--color-accent);
+    color: white;
+    border-color: var(--color-accent);
+}
+
+.sidebar-btn.active {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-bg-dark);
+}
+
+.sidebar-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 1.5;
+}
+/* --- END SIDEBAR --- */
+
+
+/* --- RESIZER --- */
+.resizer {
+    width: 3px;
+    background: var(--color-border);
+    cursor: ew-resize;
+    transition: background 0.2s;
+    position: relative;
+}
+
+.resizer:hover {
+    background: var(--color-accent);
+}
+
+.resizer::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 30px;
+    background: var(--color-text-light);
+    border-radius: 2px;
+    opacity: 0.5;
+}
+
+.resizer:hover::after {
+    background: white;
+}
+/* --- END RESIZER --- */
+
+
+/* --- PANEL HEADERS --- */
+.panel-header {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    background: var(--color-bg-dark);
+}
+
+.panel-subheader {
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 12px;
+    color: var(--color-text-light);
+    background: var(--color-bg-light);
+    min-height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    position: relative;
+}
+
+.panel-subheader::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: var(--progress-width, 0%);
+    opacity: var(--progress-opacity, 0);
+    height: 1px;
+    background-color: var(--color-accent);
+    transition: width 0.4s ease-out, opacity 0.3s ease-in-out;
+}
+
+.panel-subheader .dropdown-arrow {
+    margin-left: auto;
+    transition: transform 0.2s ease-in-out;
+}
+
+.panel-subheader.expanded .dropdown-arrow {
+    transform: rotate(90deg);
+}
+
+.panel-subheader svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+}
+/* --- END PANEL HEADERS --- */
+
+
+/* --- GENERAL UI COMPONENTS (Buttons, Inputs, etc.) --- */
+.btn {
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--color-text-light);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn:hover {
+    background: var(--color-accent);
+    color: white;
+    border-color: var(--color-accent);
+}
+
+.btn.active {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-bg-dark);
+}
+
+.btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.icon-separator {
+    width: 1px;
+    height: 24px;
+    background-color: var(--color-border);
+    margin: 0 4px;
+}
+
+.text-input {
+    background: var(--color-editor-bg);
+    border: 1px solid transparent;
+    color: var(--color-text);
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 2px;
+    flex-grow: 1;
+}
+
+input[type="text"].text-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+input[type="file"] {
+    display: none;
+}
+/* --- END GENERAL UI COMPONENTS --- */
+
+
+/* --- FLOATING ACTION BUTTONS --- */
+.editor-floating-action {
+    position: absolute;
+    z-index: 10;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-light);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.editor-floating-action:hover {
+    background-color: rgba(128, 128, 128, 0.15);
+}
+
+.editor-floating-action.active {
+    color: var(--color-accent);
+}
+
+.editor-floating-action svg {
+    width: 16px;
+    height: 16px;
+}
+/* --- END FLOATING ACTION BUTTONS --- */
+
+
+/* --- VIEWER & IFRAME --- */
+.viewer {
+    flex: 1;
+    position: relative;
+    background: var(--color-canvas-bg);
+}
+
+#canvas {
+    display: none;
+    width: 100%;
+    height: 100%;
+}
+
+#viewer-iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+/* --- END VIEWER & IFRAME --- */
+
+
+/* --- CONSOLE --- */
+.console-container {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+.console-toggle {
+    width: 40px;
+    height: 40px;
+    background: var(--color-bg-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-light);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s;
+}
+
+.console-toggle:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.console-toggle.has-error {
+    border-color: var(--color-error);
+    color: var(--color-error);
+    animation: pulse-error 1.5s infinite;
+}
+
+@keyframes pulse-error {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 139, 82, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 139, 82, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 139, 82, 0);
+    }
+}
+
+.console-window {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 250px;
+    background: var(--color-bg-dark);
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+    border-top: 1px solid var(--color-border);
+}
+
+.console-container.show .console-window {
+    transform: translateY(0);
+}
+
+.console-container.show .console-toggle {
+    display: none;
+}
+
+.console-resizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    cursor: ns-resize;
+}
+
+.console-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--color-editor-bg);
+}
+
+.console-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.console-close {
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-light);
+}
+
+.console-close:hover {
+    color: var(--color-text);
+}
+
+#console-output {
+    flex: 1;
+    background: var(--color-editor-bg);
+    padding: 8px;
+    font-family: 'Monaco', monospace;
+    font-size: 12px;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-y: auto;
+    user-select: text;
+}
+
+#console-output .log-error {
+    color: var(--color-error);
+}
+
+#console-output::-webkit-scrollbar {
+    width: 4px;
+}
+
+#console-output::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#console-output::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 10px;
+}
+
+#console-output::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+}
+/* --- END CONSOLE --- */
+
+
+/* --- TOASTS & TOOLTIPS --- */
+#toast-message {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    background-color: var(--toast-bg-color);
+    color: var(--color-accent);
+    padding: 10px 20px;
+    border-radius: 4px;
+    border: 1px solid var(--color-accent);
+    z-index: 2000;
+    visibility: hidden;
+    opacity: 0;
+    transform: translate(-50%, 100vh);
+}
+
+#toast-message.show {
+    visibility: visible;
+    animation: toast-animation 3s forwards;
+}
+
+@keyframes toast-animation {
+    0% {
+        transform: translate(-50%, 100vh);
+        opacity: 0;
+    }
+
+    15% {
+        transform: translate(-50%, -50vh);
+        opacity: 1;
+    }
+
+    30% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+
+    85% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, 50px);
+        opacity: 0;
+    }
+}
+
+#error-toast-message {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translate(-50%);
+    background-color: var(--toast-bg-color);
+    color: var(--color-error);
+    padding: 8px 16px;
+    font-size: 11px;
+    border-radius: 0;
+    border: 1px solid var(--color-error);
+    z-index: 2000;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.8s, visibility 0.8s;
+}
+
+#error-toast-message.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+.dynamic-tooltip {
+    position: absolute;
+    padding: 6px 10px;
+    background-color: var(--toast-bg-color);
+    color: var(--color-accent);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    white-space: pre-line;
+    max-width: 280px;
+    line-height: 1.4;
+    overflow-wrap: break-word;
+}
+
+.dynamic-tooltip.show {
+    opacity: 1;
+}
+
+.dynamic-tooltip .tooltip-arrow {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-style: solid;
+}
+
+.dynamic-tooltip.tooltip-top .tooltip-arrow {
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px 5px 0 5px;
+    border-color: var(--toast-bg-color) transparent transparent transparent;
+}
+
+.dynamic-tooltip.tooltip-bottom .tooltip-arrow {
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 0 5px 5px 5px;
+    border-color: transparent transparent var(--toast-bg-color) transparent;
+}
+
+.dynamic-tooltip.tooltip-left .tooltip-arrow {
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-width: 5px 0 5px 5px;
+    border-color: transparent transparent transparent var(--toast-bg-color);
+}
+
+.dynamic-tooltip.tooltip-right .tooltip-arrow {
+    left: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-width: 5px 5px 5px 0;
+    border-color: transparent var(--toast-bg-color) transparent transparent;
+}
+/* --- END TOASTS & TOOLTIPS --- */
+
+
+/* --- VIEWER OVERLAYS --- */
+.version-display {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    background: var(--color-canvas-bg);
+    border: 0px solid transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--color-accent);
+    opacity: 1;
+    transition: opacity 0.2s;
+    pointer-events: all;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+#version-arrow {
+    transition: transform 0.2s;
+}
+
+.version-display.active #version-arrow {
+    transform: rotate(90deg);
+}
+
+.version-display:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Text Shine Animation for Version Button */
+@keyframes text-shine {
+    0% {
+        background-position: 150%;
+    }
+    100% {
+        background-position: -150%;
+    }
+}
+
+#version-display.shine-text-animate {
+    color: transparent;
+    background-image: linear-gradient(
+        -75deg,
+        var(--color-accent) 0%,
+        #ffffff 50%,
+        var(--color-accent) 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: text-shine 1.2s ease-in-out 1;
+}
+/* --- END VIEWER OVERLAYS --- */
