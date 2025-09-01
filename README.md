@@ -6,7 +6,7 @@
 
 A web-based design and debugging tool to visualize, edit, and optimize typeface files for **three.js 3D text geometry**.
 
-Load, live-edit, and save JSON or TTF fonts directly in your browser, bypassing the tedious trial-and-error cycle and accelerating your 3D typography workflow.
+Load, live-edit, and save JSON or TTF fonts directly in your browser, fast tool for accelerating 3D typography workflow.
 
 ---
 
@@ -17,3 +17,4 @@ Load, live-edit, and save JSON or TTF fonts directly in your browser, bypassing 
 * ✓ Convert TTF to JSON
 * ✓ Test Different Versions
 * ✓ Optimize fonts
+
