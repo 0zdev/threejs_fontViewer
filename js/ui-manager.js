@@ -2,7 +2,7 @@
  * Project: Three.js JSON Font Editor
  * File: editor/js/ui-manager.js
  * Created: 2025-08-29
- * Author: [Tu Nombre/Apodo]
+ * Author: @lewopxd
  *
  * Description:
  * Manages the initialization, events, and state updates for all UI
@@ -15,10 +15,6 @@ import { initSmartTooltips, makeDraggable, setupModalResize, bringToFront, posit
 //--------------------[   MODULE STATE   ]---------------------
 //-------------------------------------------------------------
 
-/**
- * @var {object|null} colorPicker - The iro.js color picker instance.
- * @var {number|null} fontListHideTimeout - Timeout ID for the font list hide timer.
- */
 let colorPicker = null;
 let fontListHideTimeout;
 
@@ -34,7 +30,6 @@ let onTabSwitchCallback = () => {};
 
  /**
  * Initializes all UI components and sets up event listeners.
- * This is the main entry point for this module.
  * @param {object} callbacks - An object containing callback functions to decouple logic.
  */
 function initUIManager(callbacks) {
@@ -44,7 +39,6 @@ function initUIManager(callbacks) {
     const onMaterialSelect = callbacks.onMaterialSelect || (() => {});
 
     setupResizers();
-    // Pasamos los callbacks a las funciones que los necesitan
     initColorPicker(onColorChange);
     populateMaterialModal(onMaterialSelect);
     initSmartTooltips();
@@ -54,25 +48,16 @@ function initUIManager(callbacks) {
 
 /**
  * Sets up the resizers for the main panel and the console.
- * This is the definitive, robust version that correctly handles mouse events and the iframe for BOTH resizers.
  */
 function setupResizers() {
     const container = document.querySelector('.container');
     const resizer = document.getElementById('resizer');
-    const sidebar = document.querySelector('.sidebar');
     const editorPanel = document.querySelector('.editor-panel');
-    const viewerPanel = document.querySelector('.viewer-panel');
     const viewerIframe = document.getElementById('viewer-iframe');
     let isResizing = false;
-    let initialStableContainerWidth = 0;
-
-    const MIN_WIDTH_LEFT = 300;
-    const MIN_WIDTH_RIGHT = 100;
-    const MIN_VISIBLE_RIGHT = 10;
 
     const startResize = (e) => {
         isResizing = true;
-        initialStableContainerWidth = container.clientWidth - sidebar.offsetWidth;
         if (viewerIframe) viewerIframe.style.pointerEvents = 'none';
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'ew-resize';
@@ -83,22 +68,12 @@ function setupResizers() {
     const handleResize = (e) => {
         if (!isResizing) return;
         const containerRect = container.getBoundingClientRect();
-        const mouseX = e.clientX - containerRect.left - sidebar.offsetWidth;
-        const resizerWidth = resizer.offsetWidth;
-        const containerWidth = initialStableContainerWidth;
-        const minResizerX = MIN_WIDTH_LEFT;
-        const maxResizerX = containerWidth - MIN_VISIBLE_RIGHT - resizerWidth;
-        const clampedResizerX = Math.max(minResizerX, Math.min(mouseX, maxResizerX));
-        const newLeftWidth = clampedResizerX;
-        let newRightWidth;
-        const slideThresholdX = containerWidth - MIN_WIDTH_RIGHT - resizerWidth;
-        if (clampedResizerX < slideThresholdX) {
-            newRightWidth = containerWidth - newLeftWidth - resizerWidth;
-        } else {
-            newRightWidth = MIN_WIDTH_RIGHT;
+        const sidebarWidth = document.querySelector('.sidebar').offsetWidth;
+        const newLeftWidth = e.clientX - containerRect.left - sidebarWidth;
+        const minWidth = 150;
+        if (newLeftWidth > minWidth && containerRect.width - newLeftWidth > minWidth) {
+            editorPanel.style.width = `${newLeftWidth}px`;
         }
-        editorPanel.style.setProperty('flex', `0 0 ${newLeftWidth}px`, 'important');
-        viewerPanel.style.setProperty('flex', `0 0 ${newRightWidth}px`, 'important');
     };
 
     const stopResize = () => {
@@ -113,7 +88,7 @@ function setupResizers() {
 
     resizer.addEventListener('mousedown', startResize);
 
-     const consoleResizer = document.getElementById('consoleResizer');
+    const consoleResizer = document.getElementById('consoleResizer');
     const consoleWindow = document.getElementById('consoleWindow');
     let isConsoleResizing = false;
 
@@ -151,7 +126,6 @@ function setupResizers() {
 
 /**
  * Initializes all draggable modal windows.
- * @returns {void}
  */
 function initDraggableModals() {
     makeDraggable(document.getElementById('versionModal'));
@@ -163,10 +137,8 @@ function initDraggableModals() {
 
 /**
  * Centralized setup for various UI event listeners.
- * @returns {void}
  */
 function initUIEventListeners() {
-    // Accordion for info view & view more/less links
     document.addEventListener('click', function(e) {
         const header = e.target.closest('.info-section-header');
         if (header) {
@@ -184,7 +156,6 @@ function initUIEventListeners() {
         }
     });
 
-    // Hide font list logic
     const fontSelectorModal = document.getElementById('fontSelectorModal');
     const subheader = document.getElementById('subheader');
     fontSelectorModal.addEventListener('mouseleave', () => {
@@ -197,7 +168,6 @@ function initUIEventListeners() {
     fontSelectorModal.addEventListener('mouseenter', () => clearTimeout(fontListHideTimeout));
     subheader.addEventListener('mouseenter', () => clearTimeout(fontListHideTimeout));
 
-    // Handle window resizing for font list position
     window.addEventListener('resize', () => {
         if (fontSelectorModal.classList.contains('show')) {
             const subheaderRect = subheader.getBoundingClientRect();
@@ -217,7 +187,6 @@ function initUIEventListeners() {
 /**
  * Toggles the color theme between 'dark' and 'light'.
  * @param {object} editor - The CodeMirror editor instance.
- * @returns {void}
  */
 function toggleTheme(editor) {
     const body = document.body;
@@ -225,27 +194,44 @@ function toggleTheme(editor) {
     body.setAttribute('data-theme', newTheme);
     editor.setOption('theme', newTheme === 'dark' ? 'material-darker' : 'default');
     
-    // Notify main module that a theme change occurred
     onThemeChangeCallback(newTheme);
 }
 
 /**
  * Synchronizes the 'active' state of toolbar buttons with application state.
- * @param {object} state - An object containing the current state of the application.
- * @returns {void}
+ * @param {object} viewerState - The AppState.viewerState object.
+ * @param {boolean} isEditing - The AppState.isEditing flag.
  */
-function initButtonStates(state) {
-    document.getElementById('panBtn').classList.toggle('active', state.panEnabled);
-    document.getElementById('zoomBtn').classList.toggle('active', state.zoomEnabled);
-    document.getElementById('modeBtn').classList.toggle('active', state.is3D);
-    document.getElementById('gridBtn').classList.toggle('active', state.gridVisible);
-    document.getElementById('playPauseBtn').classList.toggle('active', state.rotationEnabled);
-    document.getElementById('rotateObjBtn').classList.toggle('active', state.rotateObjectEnabled);
-    document.getElementById('moveObjBtn').classList.toggle('active', state.moveObjectEnabled);
-    document.getElementById('rotateCamBtn').classList.toggle('active', state.rotateCameraEnabled);
-    document.getElementById('playIcon').style.display = state.rotationEnabled ? 'none' : 'block';
-    document.getElementById('pauseIcon').style.display = state.rotationEnabled ? 'block' : 'none';
-    document.getElementById('editToggleBtn').classList.toggle('active', !state.isEditorLocked);
+function initButtonStates(viewerState, isEditing) {
+    // Viewer control buttons
+    document.getElementById('panBtn').classList.toggle('active', viewerState.panEnabled);
+    document.getElementById('zoomBtn').classList.toggle('active', viewerState.zoomEnabled);
+    document.getElementById('modeBtn').classList.toggle('active', viewerState.is3D);
+    document.getElementById('gridBtn').classList.toggle('active', viewerState.gridVisible);
+    document.getElementById('playPauseBtn').classList.toggle('active', viewerState.rotationEnabled);
+    document.getElementById('rotateObjBtn').classList.toggle('active', viewerState.rotateObjectEnabled);
+    document.getElementById('moveObjBtn').classList.toggle('active', viewerState.moveObjectEnabled);
+    document.getElementById('rotateCamBtn').classList.toggle('active', viewerState.rotateCameraEnabled);
+    
+    // --- LÍNEA AÑADIDA ---
+    // Sincroniza el estado visual del botón de wireframe.
+    const wireframeBtn = document.getElementById('wireframeModeBtn');
+    if (wireframeBtn) {
+        wireframeBtn.classList.toggle('active', viewerState.isWireframeModeActive);
+    }
+    // ----------------------
+
+    document.getElementById('playIcon').style.display = viewerState.rotationEnabled ? 'none' : 'block';
+    document.getElementById('pauseIcon').style.display = viewerState.rotationEnabled ? 'block' : 'none';
+
+    // Editor action buttons
+    const saveBtn = document.getElementById('saveChangesBtn');
+    const discardBtn = document.getElementById('discardChangesBtn');
+    if (saveBtn && discardBtn) {
+        const displayStyle = isEditing ? 'flex' : 'none';
+        saveBtn.style.display = displayStyle;
+        discardBtn.style.display = displayStyle;
+    }
 }
 //----------------------------------------> END [THEME & GENERAL UI STATE]
 
@@ -257,7 +243,6 @@ function initButtonStates(state) {
 /**
  * Shows a specific tab panel and hides others.
  * @param {string} tabName - The name of the tab to show ('editor', 'glyphs', 'info').
- * @returns {void}
  */
 function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -277,7 +262,6 @@ function showTab(tabName) {
 
 /**
  * Toggles the visibility of the font selector dropdown.
- * @returns {void}
  */
 function toggleFontList() {
     const modal = document.getElementById('fontSelectorModal');
@@ -300,7 +284,6 @@ function toggleFontList() {
 
 /**
  * Shows/hides the color picker modal.
- * @returns {void}
  */
 function toggleColorPicker() {
     const modal = document.getElementById('colorPickerModal');
@@ -308,7 +291,7 @@ function toggleColorPicker() {
     if (modal.style.display === 'block') {
         modal.style.display = 'none';
     } else {
-        positionModal(modal, trigger); // <-- LÍNEA CORREGIDA Y FUNCIONAL
+        positionModal(modal, trigger);
         bringToFront(modal);
         modal.style.display = 'block';
     }
@@ -316,7 +299,6 @@ function toggleColorPicker() {
 
 /**
  * Shows/hides the material selector modal.
- * @returns {void}
  */
 function toggleMaterialModal() {
     const modal = document.getElementById('materialModal');
@@ -324,7 +306,7 @@ function toggleMaterialModal() {
     if (modal.style.display === 'block') {
         modal.style.display = 'none';
     } else {
-        positionModal(modal, trigger); // <-- LÍNEA CORREGIDA Y FUNCIONAL
+        positionModal(modal, trigger);
         bringToFront(modal);
         modal.style.display = 'block';
     }
@@ -333,7 +315,6 @@ function toggleMaterialModal() {
 /**
  * Toggles the 'Add Font' context menu.
  * @param {MouseEvent} event - The click event.
- * @returns {void}
  */
 function toggleAddFontMenu(event) {
     event.stopPropagation();
@@ -351,7 +332,6 @@ function toggleAddFontMenu(event) {
 
 /**
  * Shows the modal for loading a font from a URL.
- * @returns {void}
  */
 function showUrlModal() {
     document.getElementById('modalOverlay').style.display = 'block';
@@ -362,7 +342,6 @@ function showUrlModal() {
 
 /**
  * Hides the modal for loading a font from a URL.
- * @returns {void}
  */
 function hideUrlModal() {
     document.getElementById('modalOverlay').style.display = 'none';
@@ -379,7 +358,6 @@ function hideUrlModal() {
 /**
  * Initializes the iro.js color picker.
  * @param {function} onColorChangeCallback - Callback to execute when the color changes.
- * @returns {void}
  */
 function initColorPicker(onColorChangeCallback) {
     const hexInput = document.getElementById('hexInput');
@@ -387,7 +365,7 @@ function initColorPicker(onColorChangeCallback) {
 
     colorPicker = new iro.ColorPicker('#color-picker-container', {
         width: 180,
-        color: '#0077fe', // Initial color
+        color: '#0077fe',
         borderWidth: 1,
         borderColor: 'var(--color-border)',
         layout: [
@@ -410,7 +388,6 @@ function initColorPicker(onColorChangeCallback) {
 /**
  * Populates the material selector modal with available materials.
  * @param {function} onMaterialSelectCallback - Callback to execute when a material is selected.
- * @returns {void}
  */
 function populateMaterialModal(onMaterialSelectCallback) {
     const materials = ['Normal', 'Basic', 'Lambert', 'Phong', 'Standard', 'Physical', 'Toon', 'Wireframe'];
@@ -420,8 +397,7 @@ function populateMaterialModal(onMaterialSelectCallback) {
         const li = document.createElement('li');
         li.textContent = name;
         li.onclick = (event) => {
-            const listItems = document.querySelectorAll('#materialList li');
-            listItems.forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('#materialList li').forEach(item => item.classList.remove('active'));
             event.currentTarget.classList.add('active');
             onMaterialSelectCallback(name);
         };
@@ -441,84 +417,256 @@ function populateMaterialModal(onMaterialSelectCallback) {
 /**
  * Shows or hides the console window.
  * @param {boolean} show - True to show the console, false to hide.
- * @returns {void}
  */
 function toggleConsole(show) {
     document.getElementById('consoleContainer').classList.toggle('show', show);
 }
-
+ 
 /**
- * Logs a message to the UI console.
- * @param {string} message - The message to log.
- * @param {boolean} [isError=false] - If true, styles the message as an error.
- * @returns {void}
+ * Renderizador recursivo principal. Construye el árbol HTML interactivo final.
  */
-function logToConsole(message, isError = false) {
+function createInteractiveNode(data, key = null) {
+    const isArray = Array.isArray(data);
+    const details = document.createElement('details');
+    details.classList.add('log-object-details');
+
+    // La línea visible y clickeable
+    const summary = document.createElement('summary');
+    summary.classList.add('log-object-summary');
+
+    let summaryContent = '';
+    // Si la función recibe una clave, la renderiza primero
+    if (key) {
+        summaryContent += `<span class="log-property-key">${key}: </span>`;
+    }
+
+    const constructorName = data._constructorName || (isArray ? `Array` : 'Object');
+    const previewText = createObjectPreview(data);
+
+    // Añade el constructor y el resumen
+    if (constructorName === 'Object' || isArray) {
+        summaryContent += `<span class="log-object-preview">${previewText}</span>`;
+    } else {
+        summaryContent += `<span class="log-constructor-name">${constructorName}</span> <span class="log-object-preview">${previewText}</span>`;
+    }
+    summary.innerHTML = summaryContent;
+    details.appendChild(summary);
+
+    // Contenedor para las propiedades internas
+    const content = document.createElement('div');
+    content.classList.add('log-object-content');
+
+    for (const propKey in data) {
+        if (!Object.prototype.hasOwnProperty.call(data, propKey) || propKey.startsWith('_')) continue;
+        
+        const value = data[propKey];
+        const line = document.createElement('div');
+        line.classList.add('log-property-line');
+
+        if (typeof value === 'object' && value !== null) {
+            // Si la propiedad es otro objeto, llamamos recursivamente pasándole su clave
+            line.appendChild(createInteractiveNode(value, propKey));
+        } else {
+            // Si es un valor simple, lo mostramos con su clave
+            const keyEl = document.createElement('span');
+            keyEl.className = 'log-property-key';
+            keyEl.textContent = `${propKey}: `;
+            line.appendChild(keyEl);
+
+            const valueEl = document.createElement('span');
+            valueEl.className = `log-property-value type-${typeof value}`;
+            valueEl.textContent = typeof value === 'string' ? `"${value}"` : String(value);
+            line.appendChild(valueEl);
+        }
+        content.appendChild(line);
+    }
+    details.appendChild(content);
+    return details;
+}
+ 
+function createObjectPreview(obj) {
+    const MAX_PREVIEW_LENGTH = 100;
+
+    if (Array.isArray(obj)) {
+        let preview = `(${obj.length}) [`;
+        for (let i = 0; i < obj.length; i++) {
+            const item = obj[i];
+            let itemPreview = '';
+            if (typeof item === 'object' && item !== null) {
+                itemPreview = item._constructorName || 'Object';
+                if (itemPreview === 'Object') itemPreview = '{…}';
+            } else if (typeof item === 'string') {
+                itemPreview = `"${item}"`;
+            } else {
+                itemPreview = String(item);
+            }
+            // Comprueba la longitud antes de añadir el siguiente elemento
+            if (preview.length + itemPreview.length > MAX_PREVIEW_LENGTH) {
+                preview += '…';
+                break;
+            }
+            preview += itemPreview;
+            if (i < obj.length - 1) preview += ', ';
+        }
+        preview += ']';
+        return preview;
+    }
+
+    let preview = "{ ";
+    const keys = Object.keys(obj).filter(key => !key.startsWith('_'));
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        const value = obj[key];
+        let valuePreview = '';
+
+        if (typeof value === 'object' && value !== null) {
+            valuePreview = value._constructorName || (Array.isArray(value) ? `Array(${value.length})` : 'Object');
+        } else {
+             valuePreview = typeof value === 'string' ? `"${value}"` : String(value);
+        }
+
+        const pair = `${key}: ${valuePreview}`;
+        if (preview.length + pair.length > MAX_PREVIEW_LENGTH && i > 0) {
+             preview += '…';
+             break;
+        }
+        preview += pair;
+        if (i < keys.length - 1) preview += ', ';
+    }
+    preview += " }";
+    return preview;
+}
+    
+/**
+ * Función principal que orquesta el log en la consola UI.
+ */
+function logToConsole(dataArray, isError = false) {
     const output = document.getElementById('console-output');
     const logEntry = document.createElement('div');
     const timestamp = new Date().toLocaleTimeString();
-    logEntry.textContent = `[${timestamp}] ${message}`;
+
+     document.getElementById('consoleToggle').classList.add('has-error');
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'log-timestamp';
+    timeEl.textContent = `[${timestamp}] `;
+    logEntry.appendChild(timeEl);
+
     if (isError) {
         logEntry.classList.add('log-error');
     }
+
+    dataArray.forEach(data => {
+         if (typeof data === 'object' && data !== null && data.message && data.stack && Array.isArray(data.stack)) {
+            const msgEl = document.createElement('span');
+            msgEl.textContent = data.message;
+            logEntry.appendChild(msgEl);
+            
+             if (data.stack.length > 10) {
+                const details = document.createElement('details');
+                details.classList.add('log-object-details', 'log-stack-details');
+                const summary = document.createElement('summary');
+                summary.classList.add('log-object-summary', 'log-stack-summary');
+                summary.innerHTML = `<span class="log-constructor-name">stack:</span> <span class="log-object-preview">Array(${data.stack.length})</span>`;
+                details.appendChild(summary);
+                
+                const content = document.createElement('div');
+                content.classList.add('log-object-content');
+                data.stack.forEach((trace, index) => {
+                    const line = document.createElement('div');
+                    line.classList.add('log-property-line');
+                    line.innerHTML = `<span class="log-property-key">${index}: </span><span class="log-property-value type-string">"${trace}"</span>`;
+                    content.appendChild(line);
+                });
+                details.appendChild(content);
+                logEntry.appendChild(details);
+            } else {
+                 const stackContainer = document.createElement('div');
+                stackContainer.classList.add('log-stack-container-flat');
+                 for (let i = 1; i < data.stack.length; i++) {
+                    const line = document.createElement('div');
+                    line.className = 'log-stack-line';
+                    line.textContent = data.stack[i];
+                    stackContainer.appendChild(line);
+                }
+                logEntry.appendChild(stackContainer);
+            }
+
+        } else if (typeof data === 'object' && data !== null) {
+            logEntry.appendChild(createInteractiveNode(data));
+        } else {
+            const textEl = document.createElement('span');
+            textEl.textContent = data + ' ';
+            logEntry.appendChild(textEl);
+        }
+    });
+
     output.appendChild(logEntry);
     output.scrollTop = output.scrollHeight;
 }
 
-/**
- * Clears all messages from the UI console.
- * @returns {void}
- */
-function clearConsole() {
-    document.getElementById('console-output').innerHTML = '';
-}
+ 
 
 /**
  * Removes the error indicator from the console toggle button.
- * @returns {void}
  */
 function clearConsoleError() {
     document.getElementById('consoleToggle').classList.remove('has-error');
 }
 
 /**
- * Handles application errors by displaying them in the console and/or a toast.
+ * Handles application errors by displaying them in the appropriate console.
  * @param {Error} error - The error object.
  * @param {object} [options={}] - Display options.
- * @returns {void}
  */
 function handle_error(error, options = {}) {
     const config = {
-        showInConsole: true,
-        openConsole: false,
-        showInAlert: false,
-        alertPersistent: false,
+        showInDevConsole: true,  // <-- Vuelve a ser true por defecto para máxima visibilidad
+        showInUiConsole: null,   // <-- null para detectar si el usuario la define explícitamente
+        openUiConsole: false,
+        type: 'generic',
+        logData: null,
         ...options
     };
 
-    const errorMessage = error.stack || error.toString();
-    const cleanMessage = error.message || errorMessage;
+     
+    let shouldShowInUi = (config.type === 'threejs');
+
     
-    if (config.showInConsole) {
-        console.error(error);
-        logToConsole(errorMessage, true);
-        document.getElementById('consoleToggle').classList.add('has-error');
+    if (config.showInUiConsole !== null) {
+        shouldShowInUi = config.showInUiConsole;
+    }
+    
+    if (config.showInDevConsole) {
+         const devError = new Error(error.message);
+        devError.stack = Array.isArray(config.logData?.[0]?.stack) ? config.logData[0].stack.join('\n') : error.stack;
+        console.error(`[App Error Handled | Type: ${config.type}]`, devError);
     }
 
-    if (config.showInConsole && config.openConsole) {
-        toggleConsole(true);
+    if (shouldShowInUi) {
+        const dataToLog = config.logData || [error.stack || error.message];
+        logToConsole(dataToLog, true);
+        
+        document.getElementById('consoleToggle').classList.add('has-error');
+        if (config.openUiConsole) {
+            toggleConsole(true);
+        }
     }
 
     if (config.showInAlert) {
         const errorToast = document.getElementById('error-toast-message');
-        errorToast.textContent = cleanMessage;
-        errorToast.classList.add('show');
-
-        if (!config.alertPersistent) {
-            setTimeout(() => errorToast.classList.remove('show'), 3000);
+        if (errorToast) {
+            errorToast.textContent = error.message || 'An unexpected error occurred.';
+            errorToast.classList.add('show');
+            setTimeout(() => errorToast.classList.remove('show'), 4000);
         }
     }
 }
+function clearConsole() {
+    document.getElementById('console-output').innerHTML = '';
+    document.getElementById('consoleToggle').classList.remove('has-error');
+}
+
 //----------------------------------------> END [CONSOLE & ERROR HANDLING]
 
 
@@ -529,7 +677,6 @@ function handle_error(error, options = {}) {
 /**
  * Updates the width of the loading progress bar in the subheader.
  * @param {number} percentage - The completion percentage (0-100).
- * @returns {void}
  */
 function updateProgressBar(percentage) {
     const subheader = document.getElementById('subheader');
@@ -539,7 +686,6 @@ function updateProgressBar(percentage) {
 
 /**
  * Completes and fades out the loading progress bar.
- * @returns {void}
  */
 function finishLoadingProgress() {
     const subheader = document.getElementById('subheader');
@@ -551,7 +697,6 @@ function finishLoadingProgress() {
 
 /**
  * Hides and resets the loading progress bar, typically on error.
- * @returns {void}
  */
 function resetLoadingProgressOnError() {
     const subheader = document.getElementById('subheader');
@@ -560,10 +705,6 @@ function resetLoadingProgressOnError() {
 }
 //----------------------------------------> END [UI FEEDBACK]
 
-
-//-------------------------------------------------------------
-//--------------------[   END OF MODULE   ]--------------------
-//-------------------------------------------------------------
 
 export {
     initUIManager,

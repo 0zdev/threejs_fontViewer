@@ -375,6 +375,7 @@ input[type="file"] {
     width: 100%;
     height: 100%;
     border: none;
+    background-color: var(--color-canvas-bg);
 }
 /* --- END VIEWER & IFRAME --- */
 
@@ -519,6 +520,43 @@ input[type="file"] {
 #console-output::-webkit-scrollbar-thumb:hover {
     background: var(--color-accent);
 }
+
+.console-header {
+     justify-content: space-between;  
+}
+
+.console-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.console-btn {
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-light);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.console-btn:hover {
+    color: var(--color-text);
+}
+
+ #clearConsoleBtn svg {
+    width: 14px;  
+    height: 14px;
+}
+ #closeConsoleBtn svg {
+    width: 20px;  
+    height: 20px; 
+}
+
 /* --- END CONSOLE --- */
 
 
@@ -712,3 +750,94 @@ input[type="file"] {
     animation: text-shine 1.2s ease-in-out 1;
 }
 /* --- END VIEWER OVERLAYS --- */
+
+
+/* --- UI CONSOLE OBJECT INSPECTOR STYLES --- */
+.log-object-details {
+    display: block;
+    
+}
+.log-object-summary {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5ch;
+    outline: none;
+    font-family: 'Monaco', monospace;
+    font-size: 12px;
+}
+.log-object-summary::-webkit-details-marker { display: none; }
+.log-object-summary::before {
+    content: '►';
+    font-size: 10px;
+    margin-right: 4px;
+    transform: rotate(0deg);
+    transition: transform 0.1s ease-in-out;
+    flex-shrink: 0;
+}
+.log-object-details[open] > .log-object-summary::before {
+    transform: rotate(90deg);
+}
+.log-object-details[open] > .log-object-summary .log-object-preview {
+    display: none;
+}
+.log-constructor-name {
+    color: var(--color-text-light);
+}
+.log-object-preview {
+    color: var(--color-text-light);
+    opacity: 0.8;
+    white-space: nowrap;
+}
+.log-object-content {
+    padding-left: 18px; /* Indentación para propiedades anidadas */
+    font-family: 'Monaco', monospace;
+    font-size: 12px;
+}
+.log-property-line {
+     
+}
+.log-property-key {
+    color: #c586c0; /* Color rosa/púrpura para claves, como en VSCode */
+    margin-right: 0.5ch;
+}
+.log-property-value.type-string {
+    color: #ce9178; /* Color naranja para strings */
+}
+.log-property-value.type-number {
+    color: #b5cea8; /* Color verde para números */
+}
+.log-property-value.type-boolean {
+    color: #569cd6; /* Color azul para booleanos */
+}
+.log-property-value {
+    color: var(--color-text);
+}
+.log-stack-summary {
+    display: inline-block;
+}
+.log-timestamp {
+    color: var(--color-text-light);
+    opacity: 0.6;  
+    margin-right: 8px;
+}
+
+.log-stack-details {
+   
+    margin-left: 1ch;
+    display: block;
+}
+
+.log-stack-container-flat {
+    
+    padding-left: 2ch;  
+    color: var(--color-text-light);
+    font-family: 'Monaco', monospace;
+    font-size: 12px;
+}
+
+.log-stack-line {
+    
+    white-space: pre-wrap;  
+    padding-top: 4px;
+}

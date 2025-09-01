@@ -2,7 +2,7 @@
  * Project: Three.js JSON Font Editor
  * File: editor/js/three-versioner.js
  * Created: 2025-08-29
- * Author: [Tu Nombre/Apodo]
+ * Author: @lewopxd
  *
  * Description:
  * This module encapsulates all functionality for the Three.js version
@@ -10,35 +10,19 @@
  * reload logic.
  */
 
-//-------------------------------------------------------------
-//--------------------[   MODULE STATE   ]---------------------
-//-------------------------------------------------------------
-
 const THREEJS_API_URL = "https://api.cdnjs.com/libraries/three.js?fields=version,versions";
 const THREEJS_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/three.js/";
 
-let versionsData = {}; // Will store { latest, all: { semantic, release, simple } }
+let versionsData = {};
 let modalSelectionState = { url: null, version: null };
-let currentLoadedVersion = "r128"; // Default version
+let currentLoadedVersion = "r128";
 let currentIframeUrl = `${THREEJS_CDN_BASE}${currentLoadedVersion}/three.min.js`;
 let modalInitialized = false;
-
-// Dependencies injected from main.js
-let dependencies = {
-    ui: null,
-    viewer: null
-};
-//----------------------------------------> END [MODULE STATE]
-
-
-//-------------------------------------------------------------
-//--------------------[   INITIALIZATION   ]-------------------
-//-------------------------------------------------------------
+let dependencies = { ui: null, viewer: null, utils: null };
 
 /**
  * Initializes the Three.js versioner module.
  * @param {object} injectedDependencies - An object containing references to other modules.
- * @returns {void}
  */
 function initThreeVersioner(injectedDependencies) {
     dependencies = injectedDependencies;
@@ -46,16 +30,9 @@ function initThreeVersioner(injectedDependencies) {
     loadThreejsVersions();
     document.getElementById('version-display').addEventListener('click', toggleVersionModal);
 }
-//----------------------------------------> END [INITIALIZATION]
-
-
-//-------------------------------------------------------------
-//------------------[   API DATA FETCHING   ]------------------
-//-------------------------------------------------------------
 
 /**
- * Fetches the list of all available Three.js versions from the cdnjs API using a Web Worker.
- * @returns {void}
+ * Fetches the list of Three.js versions using a Web Worker.
  */
 function loadThreejsVersions() {
     const workerCode = `
@@ -91,7 +68,6 @@ function loadThreejsVersions() {
         }
         if (e.data.versionsData) {
             versionsData = e.data.versionsData;
-            // Animate the version button to signal that data is loaded
             const versionDisplayBtn = document.getElementById('version-display');
             setTimeout(() => {
                 versionDisplayBtn.classList.add('shine-text-animate');
@@ -99,18 +75,17 @@ function loadThreejsVersions() {
             }, 900);
         }
     };
-
     worker.postMessage({ apiUrl: THREEJS_API_URL });
 }
 
 /**
  * Fetches the file manifest for a specific Three.js version.
- * @param {string} version - The version string (e.g., "r128", "0.145.0").
- * @returns {Promise<void>}
+ * @param {string} version - The version string.
  */
 async function fetchVersionManifest(version) {
     const container = document.getElementById('fileCardContainer');
     container.classList.add('loading');
+    document.getElementById('apply-error-message').style.display = 'none';
 
     try {
         const manifestApiUrl = `https://api.cdnjs.com/libraries/three.js/${version}`;
@@ -124,16 +99,9 @@ async function fetchVersionManifest(version) {
         container.classList.remove('loading');
     }
 }
-//----------------------------------------> END [API DATA FETCHING]
-
-
-//-------------------------------------------------------------
-//-------------[   MODAL STATE & VISIBILITY   ]----------------
-//-------------------------------------------------------------
 
 /**
  * Toggles the visibility of the version selector modal.
- * @returns {void}
  */
 function toggleVersionModal() {
     const modal = document.getElementById('versionModal');
@@ -144,30 +112,20 @@ function toggleVersionModal() {
         versionDisplayBtn.classList.remove('active');
         modal.classList.remove('show');
     } else {
-        if (!modalInitialized && versionsData.latest) {
+        if (!modalInitialized) {
             initializeVersionModal();
         }
-        // positionModal(modal); // This utility can be added to utils.js if needed
-        dependencies.ui.bringToFront(modal); // Assuming bringToFront is in ui-manager or utils
+        dependencies.utils.positionModal(modal, versionDisplayBtn);
+        dependencies.utils.bringToFront(modal);
         versionDisplayBtn.classList.add('active');
         modal.classList.add('show');
-
-        // Sync modal UI with current loaded version
         syncModalToCurrentVersion();
         fetchVersionManifest(currentLoadedVersion);
     }
 }
-//----------------------------------------> END [MODAL STATE & VISIBILITY]
-
-
-//-------------------------------------------------------------
-//-------------[   MODAL UI RENDERING & SETUP   ]--------------
-//-------------------------------------------------------------
 
 /**
  * Sets up the event listeners and initial state of the modal's dropdowns.
- * Only runs once.
- * @returns {void}
  */
 function initializeVersionModal() {
     const categoryTrigger = document.getElementById('categoryTrigger');
@@ -178,8 +136,6 @@ function initializeVersionModal() {
     const versionList = document.getElementById('versionListCustom');
 
     const groupDisplayNames = { latest: "Latest", semantic: "Semantic", release: "Release (r)", simple: "Simple" };
-    
-    // Populate category dropdown
     Object.keys(groupDisplayNames).forEach(key => {
         const li = document.createElement('li');
         li.dataset.value = key;
@@ -187,12 +143,10 @@ function initializeVersionModal() {
         categoryList.appendChild(li);
     });
 
-    // Dropdown open/close logic
     categoryTrigger.addEventListener('click', (e) => { e.stopPropagation(); versionPanel.classList.remove('show'); categoryPanel.classList.toggle('show'); });
     versionTrigger.addEventListener('click', (e) => { e.stopPropagation(); categoryPanel.classList.remove('show'); versionPanel.classList.toggle('show'); });
     window.addEventListener('click', () => { categoryPanel.classList.remove('show'); versionPanel.classList.remove('show'); });
 
-    // Item selection logic
     categoryList.addEventListener('click', (e) => {
         if (e.target.tagName === 'LI' && e.target.dataset.value) {
             categoryTrigger.textContent = e.target.textContent;
@@ -207,19 +161,17 @@ function initializeVersionModal() {
             fetchVersionManifest(e.target.dataset.value);
         }
     });
-
     modalInitialized = true;
 }
 
 /**
  * Populates the version number dropdown based on the selected category.
- * @param {string} category - The selected category ('latest', 'semantic', etc.).
- * @returns {void}
+ * @param {string} category - The selected category.
  */
 function populateVersionNumberDropdown(category) {
     const versionList = document.getElementById('versionListCustom');
     const versionTrigger = document.getElementById('versionTrigger');
-    versionList.innerHTML = ''; // Clear previous items
+    versionList.innerHTML = '';
 
     let versions = (category === 'latest') ? [versionsData.latest] : (versionsData.all[category] || []);
     const sorted = versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
@@ -231,7 +183,6 @@ function populateVersionNumberDropdown(category) {
         versionList.appendChild(li);
     });
 
-    // Set the trigger to the first available version in the new list
     if (sorted.length > 0) {
         versionTrigger.textContent = sorted[0];
         versionTrigger.dataset.value = sorted[0];
@@ -245,22 +196,21 @@ function populateVersionNumberDropdown(category) {
  * Renders the list of files for a given version.
  * @param {Array<string>} files - An array of file names.
  * @param {string} version - The version string.
- * @returns {void}
  */
 function renderFileCards(files, version) {
     const container = document.getElementById('fileCardContainer');
     container.innerHTML = '';
     const applyBtn = document.getElementById('applyVersionBtn');
     
-    // Disable apply button until a file is selected
     applyBtn.classList.add('is-disabled');
     modalSelectionState = { url: null, version: null };
 
     if (!files || files.length === 0) {
-        container.innerHTML = '<div class="loader-placeholder">No files found.</div>';
+        container.innerHTML = '<div class="loader-placeholder">No files found for this version.</div>';
         return;
     }
 
+    // El filtro ha sido eliminado. Ahora iteramos sobre el array 'files' original.
     files.forEach(file => {
         const fullUrl = `${THREEJS_CDN_BASE}${version}/${file}`;
         const card = document.createElement('div');
@@ -268,25 +218,35 @@ function renderFileCards(files, version) {
         card.dataset.url = fullUrl;
         card.dataset.version = version;
         
-        // ... (HTML for card content remains the same)
+        card.innerHTML = `
+            <span class="file-card-url" title="${file}">${file}</span>
+            <button class="file-card-copy-btn" data-tooltip="Copy URL" onclick="copyCardUrl(event, '${fullUrl}')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+        `;
 
         if (fullUrl === currentIframeUrl) {
             card.classList.add('selected');
+            modalSelectionState = { url: fullUrl, version: version };
+            applyBtn.classList.remove('is-disabled');
         }
 
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.file-card-copy-btn')) return;
+            
             container.querySelector('.file-card.selected')?.classList.remove('selected');
             card.classList.add('selected');
             modalSelectionState = { url: fullUrl, version: version };
             applyBtn.classList.remove('is-disabled');
+            document.getElementById('apply-error-message').style.display = 'none';
         });
         container.appendChild(card);
     });
+    dependencies.utils.initSmartTooltips();
 }
 
 /**
- * Updates the main version display button with the current version.
- * @returns {void}
+ * Updates the main version display button.
  */
 function displayInitialVersion() {
     document.getElementById('version-text').textContent = `Three.js ${currentLoadedVersion}`;
@@ -294,12 +254,12 @@ function displayInitialVersion() {
 
 /**
  * Syncs the modal's dropdowns to reflect the currently loaded version.
- * @returns {void}
  */
 function syncModalToCurrentVersion() {
-    let category = 'release'; // Default
-    if (currentLoadedVersion.includes('.')) category = 'semantic';
-    else if (!currentLoadedVersion.startsWith('r')) category = 'simple';
+    if (!versionsData.all) return;
+    let category = 'release';
+    if (versionsData.all.semantic.includes(currentLoadedVersion)) category = 'semantic';
+    else if (versionsData.all.simple.includes(currentLoadedVersion)) category = 'simple';
     
     document.getElementById('categoryTrigger').textContent = document.querySelector(`#categoryList li[data-value="${category}"]`).textContent;
     populateVersionNumberDropdown(category);
@@ -307,22 +267,35 @@ function syncModalToCurrentVersion() {
     document.getElementById('versionTrigger').textContent = currentLoadedVersion;
     document.getElementById('versionTrigger').dataset.value = currentLoadedVersion;
 }
-//----------------------------------------> END [MODAL UI RENDERING & SETUP]
 
-
-//-------------------------------------------------------------
-//--------------[   USER ACTIONS & RELOAD LOGIC   ]------------
-//-------------------------------------------------------------
+/**
+ * Helper function to copy a file URL from a card to the clipboard.
+ * @param {Event} event - The click event.
+ * @param {string} url - The URL to copy.
+ */
+function copyCardUrl(event, url) {
+    event.stopPropagation();
+    navigator.clipboard.writeText(url).then(() => {
+        dependencies.utils.showToastMessage('URL copied!');
+    }).catch(err => {
+        console.error('Failed to copy URL: ', err);
+    });
+}
 
 /**
  * Handles the click on the "Apply & Reload" button.
- * @returns {void}
  */
 function applyThreeJsVersion() {
-    if (!modalSelectionState.url) return;
+    const errorMsg = document.getElementById('apply-error-message');
+    if (!modalSelectionState.url) {
+        errorMsg.textContent = 'Please select an asset to apply.';
+        errorMsg.style.display = 'block';
+        return;
+    }
+    errorMsg.style.display = 'none';
 
     if (modalSelectionState.url === currentIframeUrl) {
-        dependencies.ui.showConfirmationModal({
+        dependencies.utils.showConfirmationModal({
             title: "Action Confirmation",
             text: "This version is already loaded. Do you want to proceed with a reload?",
             buttons: [ { label: 'Cancel' }, { label: 'OK', callback: proceedWithReload } ]
@@ -334,31 +307,22 @@ function applyThreeJsVersion() {
 
 /**
  * Executes the viewer reload process.
- * @returns {void}
  */
 function proceedWithReload() {
     if (!modalSelectionState.url || !modalSelectionState.version) return;
 
-    // Cache the viewer state before reloading
-    dependencies.viewer.cacheState();
-
-    // Update global state and UI
     currentLoadedVersion = modalSelectionState.version;
     currentIframeUrl = modalSelectionState.url;
     
-    dependencies.ui.showToastMessage(`Reloading with Three.js ${currentLoadedVersion}...`);
+    dependencies.utils.showToastMessage(`Reloading with Three.js ${currentLoadedVersion}...`);
     displayInitialVersion();
     toggleVersionModal();
 
-    // Start the safe reload handshake via the viewer bridge
-    dependencies.viewer.requestViewerState(currentIframeUrl);
-}
-//----------------------------------------> END [USER ACTIONS & RELOAD LOGIC]
+    dependencies.viewer.reloadWithState(currentIframeUrl);}
 
-
- 
 export {
     initThreeVersioner,
-    toggleVersionModal, // Needed for onclick
-    applyThreeJsVersion // Needed for onclick
+    toggleVersionModal,
+    applyThreeJsVersion,
+    copyCardUrl // Export so main.js can attach it to window
 };

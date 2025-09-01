@@ -2,7 +2,7 @@
  * Project: Three.js JSON Font Editor
  * File: editor/js/workers/font-analyzer.js
  * Created: 2025-08-29
- * Author: [Tu Nombre/Apodo]
+ * Author: @lewopxd
  *
  * Description:
  * This script runs in a dedicated Web Worker thread. It receives font
@@ -10,9 +10,11 @@
  * result back to the main application.
  */
 
-const dev = true; //  
+const dev = false; //  
 
+if(dev){
 console.log('[WORKER] Font Analyzer Worker initialized. dev:', dev);
+}
 
 const fontAnalyzerThresholds = {
     overallScore: {

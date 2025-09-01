@@ -364,3 +364,13 @@
     width: 14px;
     height: 14px;
 }
+
+/* --- EDITOR FLOATING ACTIONS --- */
+.editor-actions-container {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+}

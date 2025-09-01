@@ -2,11 +2,11 @@
  * Project: Three.js JSON Font Editor
  * File: editor/js/font-manager.js
  * Created: 2025-08-29
- * Author: [Tu Nombre/Apodo]
+ * Author: @lewopxd
  *
  * Description:
- * This module manages all font data and related logic, including loading,
- * processing, storing, and rendering font-specific UI components.
+ * This module manages font I/O (loading, saving) and renders font-specific
+ * UI components based on the global application state.
  */
 
 import { initSmartTooltips, formatBytes, formatLabelKey, linkify, truncateText } from './utils.js';
@@ -15,27 +15,11 @@ import { initSmartTooltips, formatBytes, formatLabelKey, linkify, truncateText }
 //--------------------[   MODULE STATE   ]---------------------
 //-------------------------------------------------------------
 
-/**
- * @var {object} fontDataStore - Stores pre-loaded example fonts.
- * @var {object} userLoadedFonts - Stores fonts loaded by the user during the session.
- * @var {string} currentFontKey - The key of the currently active font.
- * @var {Worker|null} fontAnalyzerWorker - The web worker for font analysis.
- */
-const fontDataStore = {
-    'example': { name: 'example.json', fontName: 'Example', type: 'json', data: { "glyphs": { "n": { "x_min": 0, "x_max": 669, "ha": 782, "o": "m 669 0 l 469 0 l 469 452 q 442 553 469 513 q 352 601 412 601 q 245 553 290 601 q 200 441 200 505 l 200 0 l 0 0 l 0 748 l 194 748 l 194 659 q 289 744 230 713 q 416 775 349 775 q 600 700 531 775 q 669 509 669 626 l 669 0 " } }, "boundingBox": { "yMin": -333, "xMin": -162, "yMax": 1216, "xMax": 1681 }, "resolution": 1000 } }
-};
-let userLoadedFonts = {};
-export let currentFontKey = 'example';
 let fontAnalyzerWorker;
-
-// Dependencies injected from main.js
-let dependencies = {
-    editor: null,
-    ui: null,
-    viewer: null
-};
-
-let onFontLoadedCallback = () => { };
+let stateManager = {}; // Injected from main.js, manages AppState
+let dependencies = { ui: null, utils: null };
+let currentAllFonts = {};
+let currentFontID = null;
 
 //----------------------------------------> END [MODULE STATE]
 
@@ -47,32 +31,33 @@ let onFontLoadedCallback = () => { };
 /**
  * Initializes the font manager and its components.
  * @param {object} injectedDependencies - An object containing references to other modules.
+ * @param {function} onInitialFontsLoaded - Callback to run after default fonts are loaded.
  * @returns {void}
  */
-function initFontManager(injectedDependencies) {
-    dependencies = injectedDependencies;
-    // Store the callback function passed from main.js
-    onFontLoadedCallback = injectedDependencies.onFontLoaded || onFontLoadedCallback;
+function initFontManager(injectedDependencies, onInitialFontsLoaded) {
+    dependencies = {
+        ui: injectedDependencies.ui,
+        utils: injectedDependencies.utils
+    };
+    stateManager = injectedDependencies.stateManager;
     initFontAnalyzerWorker();
-    fetchAndStoreFonts();
+    fetchAndStoreFonts(onInitialFontsLoaded);
 }
 //----------------------------------------> END [INITIALIZATION]
 
 
 //-------------------------------------------------------------
-//-------------[   FONT DATA FETCHING & STORAGE   ]------------
+//-------------[   FONT DATA FETCHING & PROCESSING   ]---------
 //-------------------------------------------------------------
 
 /**
- * Fetches the default Three.js example fonts and stores them.
+ * Fetches the default Three.js example fonts. It tries to load them from
+ * the official URL first, and if that fails, it attempts to load a local
+ * fallback file. It then adds them to the AppState via the stateManager.
+ * @param {function} onComplete - Callback with the ID of the first font to be selected.
  * @returns {Promise<void>}
  */
-/**
- * Fetches the default Three.js example fonts and stores them.
- * It first tries the official URL, then falls back to a local copy if the URL fails.
- * @returns {Promise<void>}
- */
-async function fetchAndStoreFonts() {
+async function fetchAndStoreFonts(onComplete) {
     document.getElementById('fileInfo').innerHTML = `<span>Loading default fonts...</span>`;
 
     const fontsToLoad = [
@@ -89,124 +74,66 @@ async function fetchAndStoreFonts() {
         { key: 'droid_serif_bold', name: 'Droid Serif Bold', url: 'https://threejs.org/examples/fonts/droid/droid_serif_bold.typeface.json' }
     ];
 
+    let firstFontID = null;
+
+    // Add the local example font first for immediate availability.
+    const exampleData = { "glyphs": { "n": { "x_min": 0, "x_max": 669, "ha": 782, "o": "m 669 0 l 469 0 l 469 452 q 442 553 469 513 q 352 601 412 601 q 245 553 290 601 q 200 441 200 505 l 200 0 l 0 0 l 0 748 l 194 748 l 194 659 q 289 744 230 713 q 416 775 349 775 q 600 700 531 775 q 669 509 669 626 l 669 0 " } }, "boundingBox": { "yMin": -333, "xMin": -162, "yMax": 1216, "xMax": 1681 }, "resolution": 1000 };
+    const exampleFontObject = {
+        originalName: 'example.json',
+        fontName: 'Example',
+        originalType: 'json',
+        jsonData: exampleData,
+        isFallback: true // Mark as fallback since it's local.
+    };
+    const exampleId = 'example';
+    stateManager.addFont(exampleFontObject, exampleId);
+    firstFontID = exampleId;
+
+    // Process the remote fonts with local fallback logic.
     for (const font of fontsToLoad) {
         let fontData;
         let isFallback = false;
         const filename = font.url.split('/').pop();
 
         try {
-            
             const response = await fetch(font.url);
             if (!response.ok) throw new Error(`HTTP error ${response.status} for ${font.url}`);
             fontData = await response.json();
-            //console.log(`Successfully loaded '${font.name}' from URL.`);
         } catch (error) {
-            console.warn(`Could not fetch '${font.name}' from URL. Attempting local fallback...`, error);
+            //console.warn(`Could not fetch '${font.name}' from URL. Attempting local fallback...`, error);
             isFallback = true;
             
-             
             try {
                 const fallbackUrl = `./threejs_official/examples/fonts/${filename}`;
                 const fallbackResponse = await fetch(fallbackUrl);
                 if (!fallbackResponse.ok) throw new Error(`HTTP error ${fallbackResponse.status} for local file ${filename}`);
                 fontData = await fallbackResponse.json();
-                console.log(`Successfully loaded '${font.name}' from LOCAL FALLBACK.`);
-            } catch (fallbackError) {
+             } catch (fallbackError) {
                 console.error(`Failed to load '${font.name}' from both URL and local fallback. Skipping.`, fallbackError);
-                continue;  
+                continue;  // Skip this font if both sources fail.
             }
         }
         
-         fontDataStore[font.key] = {
-            data: fontData,
-            name: filename,
+        const fontObject = {
+            originalName: filename,
             fontName: get_font_FullName(fontData, font.name),
-            url: font.url,  
-            type: 'json',
-            isFallback: isFallback 
+            originalType: 'json',
+            jsonData: fontData,
+            url: font.url,
+            isFallback: isFallback
         };
+        stateManager.addFont(fontObject, font.key);
     }
 
-     populateFontListUI();
-    const initialFont = fontDataStore[currentFontKey];
-    if (initialFont) {
-        loadFontIntoEditor({
-            originalName: initialFont.name,
-            fontName: initialFont.fontName,
-            originalType: initialFont.type,
-            jsonData: initialFont.data
-        });
+    if (onComplete) {
+        onComplete(firstFontID);
     }
 }
 
-/**
- * Adds a user-loaded font to the session store and loads it.
- * @param {object} fontObject - The processed font object to add.
- * @returns {void}
- */
-function addUserFont(fontObject) {
-    const fontKey = `user_${Date.now()}`;
-    userLoadedFonts[fontKey] = {
-        name: fontObject.originalName,
-        fontName: fontObject.fontName,
-        type: fontObject.originalType,
-        data: fontObject.jsonData,
-        url: fontObject.url || null
-    };
 
-    currentFontKey = fontKey;
-
-    populateFontListUI();
-    loadFontIntoEditor(fontObject);
-
-    // Update the UI to show the new font as active
-    const newLi = document.querySelector(`#fontList li[data-font-key="${fontKey}"]`);
-    if (newLi) {
-        document.querySelectorAll('#fontList li').forEach(item => item.classList.remove('active'));
-        newLi.classList.add('active');
-    }
-}
 
 /**
- * Deletes a font from the user-loaded font store.
- * @param {Event} event - The click event.
- * @param {string} fontKey - The key of the font to delete.
- * @returns {void}
- */
-function deleteUserFont(event, fontKey) {
-    event.stopPropagation();
-    delete userLoadedFonts[fontKey];
-    populateFontListUI();
-    if (currentFontKey === fontKey) {
-        // Fallback to the default example font
-        const firstLi = document.querySelector(`#fontList li[data-font-key="example"]`);
-        selectFontFromList('example', firstLi);
-    }
-}
-
-/**
- * Copies a font's URL to the clipboard and shows a toast message.
- * @param {Event} event - The click event.
- * @param {string} url - The URL string to copy.
- * @returns {void}
- */
-function copyFontUrl(event, url) {
-    event.stopPropagation(); // Prevent the font from being selected
-    navigator.clipboard.writeText(url).then(() => {
-            dependencies.utils.showToastMessage('URL copied to clipboard');
-    }).catch(err => {
-        console.error('Failed to copy URL: ', err);
-    });
-}
-//----------------------------------------> END [FONT DATA FETCHING & STORAGE]
-
-
-//-------------------------------------------------------------
-//--------------[   FONT LOADING & PROCESSING   ]--------------
-//-------------------------------------------------------------
-
-/**
- * Event handler for the file input. Triggers font processing.
+ * Event handler for the file input. Triggers font processing and adds to state.
  * @param {Event} event - The change event from the file input.
  * @returns {Promise<void>}
  */
@@ -217,11 +144,13 @@ async function handleFileLoad(event) {
 
     try {
         const fontObject = await file_manager(file);
-        addUserFont(fontObject);
+        const newID = stateManager.addFont(fontObject);
+        stateManager.selectFont(newID);
     } catch (error) {
         dependencies.ui.handle_error(error, { openConsole: true, showInAlert: true });
     }
 }
+
 
 /**
  * Fetches and processes a font from a given URL.
@@ -241,13 +170,16 @@ async function loadFontFromUrl() {
         const fontData = await response.json();
         const fontName = url.split('/').pop() || 'new-font.json';
 
-        addUserFont({
+        const fontObject = {
             originalName: fontName,
             fontName: get_font_FullName(fontData, fontName),
             originalType: 'json',
             jsonData: fontData,
             url: url
-        });
+        };
+
+        const newID = stateManager.addFont(fontObject);
+        stateManager.selectFont(newID);
 
         dependencies.ui.hideUrlModal();
     } catch (error) {
@@ -256,7 +188,7 @@ async function loadFontFromUrl() {
 }
 
 /**
- * Processes a file, whether it's JSON or TTF.
+ * Processes a file (JSON or TTF) and returns a standardized font object.
  * @param {File} file - The file to process.
  * @returns {Promise<object>} A standardized font object.
  */
@@ -303,7 +235,7 @@ function convertTTF(file) {
                 URL.revokeObjectURL(fontUrl);
                 resolve(jsonFont);
             },
-            undefined, // onProgress callback not needed here
+            undefined,
             (error) => {
                 URL.revokeObjectURL(fontUrl);
                 console.error('TTFLoader error:', error);
@@ -312,7 +244,7 @@ function convertTTF(file) {
         );
     });
 }
-//----------------------------------------> END [FONT LOADING & PROCESSING]
+//----------------------------------------> END [FONT DATA FETCHING & PROCESSING]
 
 
 //-------------------------------------------------------------
@@ -320,17 +252,17 @@ function convertTTF(file) {
 //-------------------------------------------------------------
 
 /**
- * Triggers a download of the current editor content as a .json file.
+ * Triggers a download of the provided font data as a .json file.
+ * @param {string} fontDataString - The JSON string of the font data.
+ * @param {string} originalFileName - The original name of the font file.
  * @returns {void}
  */
-function saveFont() {
-    const editor = dependencies.editor.getEditorInstance();
-    const blob = new Blob([editor.getValue()], { type: 'application/json' });
+function saveFont(fontDataString, originalFileName) {
+    const blob = new Blob([fontDataString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const currentName = document.querySelector('#fileInfo > span:last-of-type').textContent || 'font';
-    a.download = currentName.replace(/\.(json|ttf|otf)$/i, '') + '.json';
+    a.download = originalFileName.replace(/\.(json|ttf|otf)$/i, '') + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -353,67 +285,69 @@ function loadFontFromFile() {
 //-------------------------------------------------------------
 
 /**
- * Loads a processed font object into the editor and updates all relevant UI.
- * @param {object} fontObject - The standardized font object.
- * @returns {void}
+ * Main entry point for this module to update its UI based on the global state.
+ * @param {object} allFonts - The AppState.inAppFonts object.
+ * @param {string} activeFontID - The AppState.currentFontID.
  */
-function loadFontIntoEditor(fontObject) {
-    dependencies.ui.updateProgressBar(20);
+function updateUI(allFonts, activeFontID) {
+    currentAllFonts = allFonts;
+    currentFontID = activeFontID;
 
-    const editor = dependencies.editor.getEditorInstance();
-    editor.setValue(JSON.stringify(fontObject.jsonData, null, 2));
+    populateFontListUI();
 
-    dependencies.ui.updateProgressBar(40);
+    const activeFont = allFonts[activeFontID];
+    if (activeFont) {
+        updateSubheader(activeFont);
+         renderInfoView();
+    } else {
+        // Clear UI if no font is active
+        document.getElementById('fileInfo').innerHTML = '<span>No font selected.</span>';
+        document.getElementById('fontDetails').textContent = '';
+    }
+}
 
+/**
+ * Updates the subheader with the current font's information.
+ * @param {object} fontObject - The active font object from AppState.
+ */
+function updateSubheader(fontObject) {
     const fileInfoSpan = document.getElementById('fileInfo');
-    if (fontObject.originalType === 'ttf') {
+    if (fontObject.type === 'ttf') {
         fileInfoSpan.innerHTML = `<span class="subheader-format">(TTF)</span> <span>${fontObject.fontName}</span> <span style="margin: 0 4px; color: var(--color-text-light);">></span> <span>.json</span>`;
     } else {
         fileInfoSpan.innerHTML = `<span class="subheader-format">(JSON)</span> <span>${fontObject.fontName}</span>`;
     }
-
-    // Lock the editor by default on any new font load
-    if (!dependencies.editor.isEditorLocked) {
-        dependencies.editor.toggleEditorLock();
-    }
-
-    updateFontFileInfo();
-    analyzeCurrentFont();
-    renderInfoView(); // Update info tab
-    dependencies.viewer.update(); // Trigger viewer update
-
-    dependencies.ui.finishLoadingProgress();
-
-    onFontLoadedCallback();
-
+    updateFontFileInfo(fontObject.data);
 }
 
 /**
  * Re-draws the entire font list in the UI based on the current state.
- * It now handles rendering a fallback icon for locally loaded fonts.
- * @returns {void}
+ * It now handles rendering fallback icons and action buttons.
  */
 function populateFontListUI() {
     const list = document.getElementById('fontList');
     list.innerHTML = '';
 
-    const createLi = (key, font) => {
+  const createLi = (key, font) => {
         const li = document.createElement('li');
         const isUserFont = key.startsWith('user_');
 
-        const iconSVG = font.url && !isUserFont
+        // --- LÍNEA CORREGIDA ---
+        // La lógica ahora comprueba si la fuente tiene una URL y NO es un respaldo local.
+        const iconSVG = font.url && !font.isFallback
             ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></svg>`
             : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
         
+        // Generates the correct action buttons based on font type
         let actionsHTML = '';
          if (font.isFallback) {
-             const tooltipText = `Using local font file.\n\nThe original source isn't available at: \n${font.url}\n\n---\nYou can modify this local file, save your changes\n and using it by downloading it.`;
-            
-             actionsHTML = `<div class="font-actions-container">
-                <div class="font-action-info" data-tooltip="${tooltipText}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                </div>
-            </div>`;
+              const tooltipText = `Using local font file.\n\nThe original source isn't available at: \n${font.url}\n\n---\nYou can modify this local file, save your changes\n and using it by downloading it.`;
+              
+              actionsHTML = `<div class="font-actions-container">
+                  <div class="font-action-info" data-tooltip="${tooltipText}">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                  </div>
+             </div>`;
         } else if (isUserFont) {   
             actionsHTML = `<div class="font-actions-container"><div class="copy-icon-wrapper">
                 <div class="copy-event-interceptor" data-tooltip="Delete Font" onclick="deleteUserFont(event, '${key}')"></div>
@@ -431,68 +365,52 @@ function populateFontListUI() {
 
         li.innerHTML = `${iconSVG}<span class="subheader-format">(${font.type.toUpperCase()})</span><span>${font.fontName}</span>${actionsHTML}`;
         li.dataset.fontKey = key;
+        if (key === currentFontID) {
+            li.classList.add('active');
+        }
 
+        // Prevents selecting the font when clicking an action icon
         li.addEventListener('click', (e) => {
-            if (e.target.closest('.copy-event-interceptor') || e.target.closest('.font-action-fallback')) return;
-            selectFontFromList(key, li);
+            if (e.target.closest('.copy-event-interceptor') || e.target.closest('.font-action-info')) return;
+            stateManager.selectFont(key);
         });
         
         return li;
     };
 
-     list.appendChild(createLi('example', fontDataStore['example']));
-    for (const key in fontDataStore) {
-        if (key !== 'example') list.appendChild(createLi(key, fontDataStore[key]));
-    }
-    if (Object.keys(userLoadedFonts).length > 0) {
-        const separator = document.createElement('div');
-        separator.className = 'font-list-separator';
-        separator.innerHTML = '<span>--- loaded fonts ---</span>';
-        list.appendChild(separator);
-        for (const key in userLoadedFonts) list.appendChild(createLi(key, userLoadedFonts[key]));
+    // This is the modern, sorted loop from v1.2.4
+    const sortedKeys = Object.keys(currentAllFonts).sort((a, b) => {
+        if (a === 'example') return -1;
+        if (b === 'example') return 1;
+        if (a.startsWith('user_') && !b.startsWith('user_')) return 1;
+        if (!a.startsWith('user_') && b.startsWith('user_')) return -1;
+        return currentAllFonts[a].fontName.localeCompare(currentAllFonts[b].fontName);
+    });
+
+    let hasAddedSeparator = false;
+    for (const key of sortedKeys) {
+        if (key.startsWith('user_') && !hasAddedSeparator) {
+            const separator = document.createElement('div');
+            separator.className = 'font-list-separator';
+            separator.innerHTML = '<span>--- loaded fonts ---</span>';
+            list.appendChild(separator);
+            hasAddedSeparator = true;
+        }
+        list.appendChild(createLi(key, currentAllFonts[key]));
     }
     initSmartTooltips();
 }
-
-
-
-/**
- * Handles the selection of a font from the list.
- * @param {string} fontKey - The key of the selected font.
- * @param {HTMLElement} element - The clicked <li> element.
- * @returns {void}
- */
-function selectFontFromList(fontKey, element) {
-    dependencies.ui.updateProgressBar(10);
-    const font = fontDataStore[fontKey] || userLoadedFonts[fontKey];
-    if (font) {
-        currentFontKey = fontKey;
-        loadFontIntoEditor({
-            originalName: font.name,
-            fontName: font.fontName,
-            originalType: font.type,
-            jsonData: font.data
-        });
-
-        document.querySelectorAll('#fontList li').forEach(item => item.classList.remove('active'));
-        element.classList.add('active');
-    }
-}
-
 /**
  * Updates the file details (size, char count) in the subheader.
+ * @param {object} fontData - The JSON data of the current font.
  * @returns {void}
  */
-function updateFontFileInfo() {
+function updateFontFileInfo(fontData) {
     const detailsSpan = document.getElementById('fontDetails');
-    const editor = dependencies.editor.getEditorInstance();
     try {
-        const fontJsonString = editor.getValue();
+        const fontJsonString = JSON.stringify(fontData);
         const sizeInBytes = new Blob([fontJsonString]).size;
-
-        const fontData = JSON.parse(fontJsonString);
         const charCount = Object.keys(fontData.glyphs || {}).length;
-
         detailsSpan.textContent = `${dependencies.utils.formatBytes(sizeInBytes)}, ${charCount} chars`;
     } catch (e) {
         detailsSpan.textContent = '';
@@ -503,12 +421,10 @@ function updateFontFileInfo() {
  * Renders the content of the "Font Info" tab.
  * @returns {void}
  */
- 
 function renderInfoView() {
-    const font = fontDataStore[currentFontKey] || userLoadedFonts[currentFontKey];
-    if (!font) return;
+    const font = currentAllFonts[currentFontID];
+    if (!font || !document.getElementById('info-view').classList.contains('active')) return;
 
-    const editor = dependencies.editor.getEditorInstance();
     const techList = document.getElementById('tech-details-list');
     const metadataList = document.getElementById('metadata-list');
     const metadataFallback = document.getElementById('metadata-fallback');
@@ -518,54 +434,42 @@ function renderInfoView() {
     metadataFallback.style.display = 'none';
 
     try {
-        const fileSize = new Blob([editor.getValue()]).size;
+        const fontJsonString = JSON.stringify(font.data);
+        const fileSize = new Blob([fontJsonString]).size;
         const glyphCount = Object.keys(font.data.glyphs || {}).length;
         const outlineStats = analyzeFontOutlines(font.data);
-        
-        const breakdown = [
-            outlineStats.m > 0 ? `<span data-tooltip="m = moveto">(m: ${outlineStats.m.toLocaleString()})</span>` : '',
-            outlineStats.l > 0 ? `<span data-tooltip="l = lineto">(l: ${outlineStats.l.toLocaleString()})</span>` : '',
-            outlineStats.q > 0 ? `<span data-tooltip="q = quadratic curveto">(q: ${outlineStats.q.toLocaleString()})</span>` : ''
-        ].filter(Boolean).join(' ');
 
         const techData = {
             'File Name': font.name,
             'File Type': `${font.type.toUpperCase()}`,
             'File Size': formatBytes(fileSize),
             'Glyph Count': glyphCount.toLocaleString(),
-            'Commands': `${outlineStats.total.toLocaleString()} ${breakdown}`
         };
 
         for (const key in techData) {
-            if (techData[key]) {
-                techList.innerHTML += `<dt>${key}</dt><dd>${techData[key]}</dd>`;
-            }
+            techList.innerHTML += `<dt>${key}</dt><dd>${techData[key]}</dd>`;
         }
 
         const metadata = font.data.original_font_information;
         if (metadata && Object.keys(metadata).length > 0) {
-            let hasContent = false;
+            metadataList.style.display = '';
+            metadataFallback.style.display = 'none';
             for (const key in metadata) {
                 let value = metadata[key].en || metadata[key];
                 if (value) {
-                    hasContent = true;
                     const finalValue = truncateText(linkify(value));
                     metadataList.innerHTML += `<dt title="${key}">${formatLabelKey(key)}</dt><dd>${finalValue}</dd>`;
                 }
             }
-            if (!hasContent) metadataFallback.style.display = 'block';
         } else {
+            metadataList.style.display = 'none';
             metadataFallback.style.display = 'block';
         }
-
         initSmartTooltips();
-
     } catch (error) {
         console.error("Failed to render font info:", error);
-        techList.innerHTML = `<dt>Error</dt><dd>Could not parse font data to render info.</dd>`;
     }
 }
-
 //----------------------------------------> END [UI RENDERING & UPDATES]
 
 
@@ -573,36 +477,21 @@ function renderInfoView() {
 //----------------[   FONT ANALYSIS (WORKER)   ]---------------
 //-------------------------------------------------------------
 
-/**
- * Initializes the web worker for font analysis by loading it from its dedicated file.
- * @returns {void}
- */
 function initFontAnalyzerWorker() {
-     try {
-        
+    try {
         fontAnalyzerWorker = new Worker('./js/workers/font-analyzer.js');
-
-         fontAnalyzerWorker.onmessage = function (e) {
-             const result = JSON.parse(e.data);
-             updateAnalysisUI(result);
+        fontAnalyzerWorker.onmessage = function(e) {
+            const result = JSON.parse(e.data);
+            updateAnalysisUI(result);
         };
-
-         fontAnalyzerWorker.onerror = function(error) {
+        fontAnalyzerWorker.onerror = function(error) {
             console.error("An error occurred in the Font Analyzer Worker:", error);
-            dependencies.ui.handle_error(new Error(`Worker error: ${error.message}`));
         };
-
     } catch (error) {
         console.error("Failed to initialize the Font Analyzer Worker.", error);
-        dependencies.ui.handle_error(error);
     }
 }
 
-/**
- * Updates the font analysis section of the UI with results from the worker.
- * @param {object} result - The analysis result object from the worker.
- * @returns {void}
- */
 function updateAnalysisUI(result) {
     const analysisSpan = document.getElementById('fontAnalysis');
     if (!analysisSpan || !result) return;
@@ -632,39 +521,17 @@ function updateAnalysisUI(result) {
     initSmartTooltips();
 }
 
-/**
- * Triggers the analysis of the font currently in the editor.
- * It gets the data, calculates the size, and posts it to the worker.
- * @returns {void}
- */
-function analyzeCurrentFont() {
-    //@leo, Esta es la función completa que faltaba para INICIAR el análisis.
-    const editor = dependencies.editor.getEditorInstance();
-    if (!fontAnalyzerWorker || !editor) {
-        // Silently fail if worker or editor aren't ready.
-        return;
-    }
-
-    // Set a temporary "Analyzing..." message in the UI
+function analyzeCurrentFont(fontData) {
+    if (!fontAnalyzerWorker) return;
     document.getElementById('fontAnalysis').innerHTML = 'Analyzing...';
-    document.getElementById('fontAnalysis').removeAttribute('data-tooltip');
-
     try {
-        const fontJsonString = editor.getValue();
-        const fontData = JSON.parse(fontJsonString);
+        const fontJsonString = JSON.stringify(fontData);
         const fileSize = new Blob([fontJsonString]).size;
-
-        // This is the crucial line that was missing:
-        // Send the data to the worker to start the analysis.
         fontAnalyzerWorker.postMessage({ fontData, fileSize });
-
     } catch (e) {
-        // If JSON is invalid while trying to analyze, just clear the display.
         document.getElementById('fontAnalysis').innerHTML = '';
     }
 }
-
-
 //----------------------------------------> END [FONT ANALYSIS (WORKER)]
 
 
@@ -672,85 +539,73 @@ function analyzeCurrentFont() {
 //--------------------[   HELPER FUNCTIONS   ]-----------------
 //-------------------------------------------------------------
 
-/**
- * Extracts a display-friendly full name from font metadata.
- * It searches in multiple possible locations within the JSON data.
- * @param {object} jsonData - The Three.js font data.
- * @param {string} fallbackFileName - A fallback name to use if metadata is absent.
- * @returns {string} The determined full name of the font.
- */
 function get_font_FullName(jsonData, fallbackFileName) {
     let fontName = '';
-
-    // Priority 1: Modern metadata object from opentype.js
     const info = jsonData.original_font_information;
     if (info) {
-        if (info.full_font_name) {
-            fontName = info.full_font_name;
-        } else if (info.font_family_name) {
+        if (info.full_font_name) fontName = info.full_font_name;
+        else if (info.font_family_name) {
             const family = info.font_family_name;
             const subFamily = info.font_subfamily_name;
             fontName = (subFamily && subFamily.toLowerCase() !== 'regular') ? `${family} ${subFamily}` : family;
-        } else if (info.postscript_name) {
-            fontName = info.postscript_name;
         }
     }
-
-    // Priority 2: Older Three.js JSON format fields
-    if (!fontName) {
-        if (typeof jsonData.fullName === 'string') {
-            fontName = jsonData.fullName;
-        } else if (jsonData.fontFamily?.en || jsonData.familyName) {
-            const family = jsonData.fontFamily?.en || jsonData.familyName;
-            const subFamily = jsonData.fontSubfamily?.en || jsonData.styleName;
-            if (subFamily && !family.toLowerCase().includes(subFamily.toLowerCase())) {
-                fontName = `${family} ${subFamily}`;
-            } else {
-                fontName = family;
-            }
-        }
-    }
-
-    // Priority 3: Fallback to the file name
     if (!fontName) {
         fontName = fallbackFileName;
     }
-
-    // Final cleanup: remove file extensions
     return fontName.replace(/\.(json|ttf|otf|woff2?)/gi, '').trim();
 }
 
-/**
- * Analyzes the outlines of all glyphs to count drawing commands.
- * @param {object} fontData - The Three.js font data.
- * @returns {{m: number, l: number, q: number, total: number}} An object with command counts.
- */
 function analyzeFontOutlines(fontData) {
     const stats = { m: 0, l: 0, q: 0, total: 0 };
-    const glyphs = fontData.glyphs || {};
-
-    for (const char in glyphs) {
-        const outline = glyphs[char].o || '';
-        const commands = outline.match(/[mlq]/g) || [];
-        for (const cmd of commands) {
-            stats[cmd]++;
-        }
+    for (const char in fontData.glyphs || {}) {
+        const outline = fontData.glyphs[char].o || '';
+        (outline.match(/[mlq]/g) || []).forEach(cmd => stats[cmd]++);
     }
-
     stats.total = stats.m + stats.l + stats.q;
     return stats;
 }
-//----------------------------------------> END [HELPER FUNCTIONS]
 
+/**
+ * Provides the raw data for the currently active font.
+ * This is called by the viewer bridge during the state restoration handshake.
+ * @returns {object|null} The JSON data of the current font, or null if not found.
+ */
+function provideFontDataForRestore() {
+    if (currentFontID && currentAllFonts[currentFontID]) {
+        return currentAllFonts[currentFontID].data;
+    }
+    console.warn('[FontManager] provideFontDataForRestore was called but no active font was found.');
+    return null;
+}
+/**
+ * Copies the font URL to the clipboard and shows a toast notification.
+ * @param {Event} event - The click event to prevent propagation.
+ * @param {string} url - The URL string to copy.
+ */
+function copyFontUrl(event, url) {
+    event.stopPropagation(); // Evita que al hacer clic se seleccione la fuente.
+    if (navigator.clipboard && url) {
+        navigator.clipboard.writeText(url).then(() => {
+            dependencies.utils.showToastMessage('URL copied!');
+        }).catch(err => {
+            console.error('Failed to copy URL: ', err);
+            dependencies.utils.showToastMessage('Error copying URL');
+        });
+    }
+}
+
+//----------------------------------------> END [HELPER FUNCTIONS]
 
 
 export {
     initFontManager,
+    updateUI,
     handleFileLoad,
     loadFontFromUrl,
     saveFont,
     loadFontFromFile,
-    selectFontFromList,
-    deleteUserFont,  
-    copyFontUrl       
+    provideFontDataForRestore,
+    analyzeCurrentFont,
+    copyFontUrl
 };

@@ -2,7 +2,7 @@
  * Project: Three.js JSON Font Editor
  * File: editor/js/utils.js
  * Created: 2025-08-29
- * Author: [Tu Nombre/Apodo]
+ * Author: @lewopxd
  *
  * Description:
  * This module serves as a toolbox of reusable, general-purpose helper
@@ -138,11 +138,18 @@ function setupModalResize(modalElement) {
  */
 function positionModal(modalElement, triggerElement) {
     // Make the modal temporarily visible to measure it
+    const originalVisibility = modalElement.style.visibility;
+    const originalDisplay = modalElement.style.display;
+
     modalElement.style.visibility = 'hidden';
-    modalElement.style.display = 'block';
+    modalElement.style.display = 'block'; // Use 'block' for consistent measurement
     const modalRect = modalElement.getBoundingClientRect();
-    modalElement.style.display = 'none';
-    modalElement.style.visibility = 'visible';
+    
+    // --- LÍNEA CORREGIDA ---
+    // Restore original styles instead of forcing display:none
+    modalElement.style.display = originalDisplay;
+    modalElement.style.visibility = originalVisibility;
+    // -------------------------
 
     let top, left;
 
@@ -176,6 +183,8 @@ function positionModal(modalElement, triggerElement) {
     modalElement.style.top = `${top}px`;
     modalElement.style.left = `${left}px`;
 }
+
+
 //----------------------------------------> END [UI COMPONENTS]
 
 
