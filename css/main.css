@@ -2,16 +2,38 @@
 :root {
     /* Light Theme (Base) */
     --color-bg-light: #f8f9fa;
-    --color-bg-dark: #ffffff;
-    --color-border: #e1e5e9;
+    --color-bg-dark: #e3e3e9;
+    --color-border: #c4c4c4;
     --color-accent: #0066cc;
     --color-accent2: #04596a;
     --color-text: #2d2d2d;
     --color-text-light: #666666;
-    --color-editor-bg: #fafbfc;
+    --color-editor-bg: #eff4f9;
     --color-canvas-bg: #f8f9fa;
     --color-error: #d9534f;
+    --color-text-preview: #454545;
     --toast-bg-color: rgba(45, 45, 45, 0.9);
+    --color-bg-version-list: #fafbfcbd;
+    --color-bg-version-scroll: #25242450;
+    --color-bg-stack-panel:#f8f9fa7f;
+
+     /* --- MODAL VARIABLES --- */
+ 
+     --modal-bg-color: var(--color-bg-light);
+     --modal-border-color:var(--color-border);
+     --modal-header-bg: transparent;
+     --modal-input-bg: transparent
+     --modal-input-border: #3c3c3c;
+     --modal-btn-bg: var(--color-accent2);
+     --modal-btn-hover-bg: var(--color-accent2);
+     --modal-secondary-btn-bg: transparent
+     --modal-secondary-btn-hover-bg: var(--color-bg-light);
+
+     --modal-border-radius: 3px;    
+  
+ /* --- END MODAL VARIABLES --- */
+
+ 
 }
 
 [data-theme="dark"] {
@@ -25,7 +47,28 @@
     --color-editor-bg: #1e1e1e;
     --color-canvas-bg: #1a1a1a;
     --color-error: #ff8b52;
-    --toast-bg-color: rgba(26, 26, 26, 0.9);
+    --color-text-preview: #cccccc;
+    --toast-bg-color: rgba(26, 26, 26, 0.9);    
+    --color-bg-version-list: #191717e3;
+    --color-bg-version-scroll: #42424250;
+    --color-bg-stack-panel: #1a1a1a70;
+
+
+
+    /* --- MODAL VARIABLES --- */
+ 
+    --modal-bg-color: var(--color-editor-bg);
+    --modal-border-color: var(--color-border);
+    --modal-header-bg: transparent;
+    --modal-input-bg: transparent;
+    --modal-input-border: var(--color-border);
+    --modal-btn-bg: var(--color-accent2);
+    --modal-btn-hover-bg: var(--color-accent2);
+    --modal-secondary-btn-bg: transparent;
+    --modal-secondary-btn-hover-bg: var(--color-bg-light);
+ 
+/* --- END MODAL VARIABLES --- */
+
 }
 
 * {
@@ -252,7 +295,7 @@ body {
 }
 
 .panel-subheader.expanded .dropdown-arrow {
-    transform: rotate(90deg);
+    transform: rotate(180deg);
 }
 
 .panel-subheader svg {
@@ -323,8 +366,8 @@ input[type="file"] {
 /* --- END GENERAL UI COMPONENTS --- */
 
 
-/* --- FLOATING ACTION BUTTONS --- */
-.editor-floating-action {
+ /* --- FLOATING ACTION BUTTONS --- */
+.top-right-panel-btn {
     position: absolute;
     z-index: 10;
     top: 8px;
@@ -340,17 +383,18 @@ input[type="file"] {
     justify-content: center;
     border-radius: 4px;
     transition: all 0.2s ease;
+    margin: 0;
 }
 
-.editor-floating-action:hover {
+.top-right-panel-btn:hover {
     background-color: rgba(128, 128, 128, 0.15);
 }
 
-.editor-floating-action.active {
+.top-right-panel-btn.active {
     color: var(--color-accent);
 }
 
-.editor-floating-action svg {
+.top-right-panel-btn svg {
     width: 16px;
     height: 16px;
 }
@@ -736,7 +780,8 @@ input[type="file"] {
     }
 }
 
-#version-display.shine-text-animate {
+.version-selector-container.shine-text-animate .header-left,
+.version-selector-container.shine-text-animate .middle {
     color: transparent;
     background-image: linear-gradient(
         -75deg,
@@ -840,4 +885,354 @@ input[type="file"] {
     
     white-space: pre-wrap;  
     padding-top: 4px;
+}
+ 
+
+/* --- VIEWER ACTION BUTTONS STACK --- */
+.viewer-actions-stack {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#wireframeModeBtn svg {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.viewer-actions-stack .top-right-panel-btn {
+    position: relative;
+    top: auto;
+    right: auto;
+}
+
+/*End---  Viewer actions buttons stack*/
+ 
+
+
+
+/* --- FINAL CORRECTED VERSION DROPDOWN --- */
+.version-selector-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1001;
+    font-size: 12px;
+     
+}
+
+.outer-table {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    gap: 0;
+    width: fit-content;
+    overflow: hidden;
+}
+
+.outer-table > li {
+    padding: 4px 8px;
+    text-align: left;
+    white-space: nowrap;
+    color: var(--color-accent);
+    cursor: default;
+    display: flex;
+    align-items: center;
+}
+
+.outer-table > li.header {
+    background-color: transparent;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    user-select: none;
+}
+
+.outer-table:hover > li.header {
+    background-color: var(--color-bg-version-list);
+}
+
+.outer-table > li.header.header-left {
+    padding-left: 2px;
+    padding-right: 2px;
+     
+}
+
+.outer-table:hover > li.header.header-left {
+    background-color: transparent;
+     
+}
+.outer-table > li.header.header-right {
+    padding-left: 2px;
+    padding-right: 2px;
+}
+.outer-table:hover > li.header.header-right {
+    background-color: transparent;
+     
+}
+
+ 
+.version-arrow-svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--color-accent);
+    stroke-width: 1.5;
+    fill: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(0deg);
+}
+
+.outer-table.expanded .version-arrow-svg {
+    transform: rotate(-180deg);
+}
+
+/* This is the key change: NO grid-column span */
+.outer-table > li.data.middle {
+    background-color: var(--color-bg-version-list);
+    padding: 0;
+    height: auto;
+    position: relative;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+     
+}
+
+.outer-table.expanded > li.data.middle {
+    max-height: 120px;
+    opacity: 1;
+}
+
+.version-selector-container.expanded .outer-table > li.data.middle {
+    max-height: 120px;
+    opacity: 1;
+ }
+
+ .version-arrow-svg {
+    transform: rotate(90deg);
+}
+ .version-selector-container.expanded .version-arrow-svg {
+    transform: rotate(270deg);
+}
+
+.inner-scroll {
+    width: 100%;
+    height: 100px; /* Exact value from example */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0px;
+    
+}
+
+.inner-scroll ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    
+}
+
+.inner-scroll li {
+    padding: 4px 8px;
+    text-align:  justify;
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+    color: var(--color-accent);
+    
+}
+
+.inner-scroll li:hover {
+    background-color: var(--color-editor-bg);
+}
+
+.inner-scroll li:last-child {
+    border-bottom: none;
+}
+
+/* --- CSS-Only Scrollbar for Version Dropdown --- */
+.inner-scroll::-webkit-scrollbar {
+    width: 2px;
+     
+    display: none;
+}
+
+.inner-scroll:hover::-webkit-scrollbar {
+    display: block;
+}
+
+.inner-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.inner-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-bg-version-scroll);
+    
+    border-radius: 4px;
+    opacity: 0.5;
+}
+
+.inner-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+    opacity: 1;
+}
+
+/* --- Advanced Options Row Styles --- */
+.outer-table > li.footer-cell {
+    background-color: var(--color-bg-light);
+    border-top: 1px solid var(--color-border);
+}
+
+.outer-table > li.footer-cell.middle {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    justify-content: center;
+}
+
+.advanced-options-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-light);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px;
+    font-family: inherit;
+    transition: color 0.2s ease;
+}
+
+.advanced-options-btn:hover {
+    color: var(--color-accent);
+}
+
+.adv-opt-icon {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+
+ 
+
+ /* --- Floating Version Search Button --- */
+.version-search-btn {
+    position: absolute;
+    top: 26px;  /* Position below the header */
+    right: -1px; /* Align under the arrow area */
+    
+    /* Visibility Control */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-10px);
+    transition: opacity 0.2s 0.1s ease, 
+                visibility 0.2s 0.1s ease,
+                transform 0.2s 0.1s ease;
+
+    /* Styling (similar to wireframe button) */
+    background: transparent;
+    border: 0.1px solid transparent;
+    border-radius: 4px;
+    width: 21px;
+    height: 21px;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-accent);
+}
+
+.version-selector-container.expanded .version-search-btn {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.version-search-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.version-search-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+}
+
+
+/* --- Loaded Asset Indicator --- */
+.loaded-asset-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0; /* Cubre todo el ancho */
+    background-color:var(--color-bg-dark);
+    color: var(--color-text);
+    font-size: 10px;
+    padding: 3px 8px;
+    font-family: 'Monaco', monospace; /* Fuente monoespaciada para URLs */
+    
+    /* Para manejar URLs largas */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    
+    text-align: left;
+    z-index: 5;
+    opacity: 0.6;
+    transition: opacity 0.3s;
+    cursor: help;
+}
+
+.loaded-asset-indicator:hover {
+    opacity: 1;
+}
+
+/* --- VIEWER FLOATING ACTIONS (NEW LAYOUT) --- */
+
+.viewer-actions-top-center {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+    background-color: var(--color-bg-light);
+    padding: 4px;
+    border-radius: 6px;
+    border: transparent;
+}
+
+/* Overrides the absolute positioning of buttons when inside a floating container.
+  vvv ESTE ES EL SELECTOR CORREGIDO Y AMPLIADO vvv
+*/
+.viewer-actions-stack .top-right-panel-btn,
+.viewer-actions-top-center .top-right-panel-btn {
+    position: relative;
+    top: auto;
+    right: auto;
+}
+.viewer-actions-stack{
+    background-color: var(--color-bg-stack-panel);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+.action-stack-separator {
+    width: 85%;
+    height: 1px;
+    background-color: var(--color-border);
+    margin: 4px auto;
+    opacity: 0.6;
+}
+
+/* Ensure the viewer header tab group is pushed to the right */
+.viewer-panel .panel-header .tab-buttons-group {
+    margin-left: auto;
 }

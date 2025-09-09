@@ -31,7 +31,7 @@ function initEditor(elementId, onChangeCallback) {
         mode: { name: "javascript", json: true },
         theme: 'material-darker',
         lineWrapping: true,
-        readOnly: false // The editor is always editable; state is managed by AppState
+        readOnly: true  
     });
 
     document.getElementById('editor-view').style.visibility = 'visible';

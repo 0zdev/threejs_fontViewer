@@ -1,0 +1,11 @@
+ User-agent: *
+
+Allow: /css/
+Allow: /js/
+Allow: /assets/
+
+Disallow: /viewer/
+
+Disallow: /threejs_official/
+
+Sitemap: https://0zdev.github.io/threejs_fontViewer/sitemap.xml

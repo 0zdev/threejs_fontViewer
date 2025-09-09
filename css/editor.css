@@ -136,8 +136,9 @@
     border-bottom: 1px solid transparent;
     height: 44px;
     display: flex;
-    align-items: center;
+    align-items: center; /* Centra los 3 elementos verticalmente */
     flex-shrink: 0;
+    gap: 16px; /* Añade un espacio entre los elementos */
 }
 
 #glyphCount {
@@ -374,3 +375,93 @@
     display: flex;
     gap: 4px;
 }
+
+.editor-action-btn {
+    background: none;
+    border: none;
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-light);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.editor-action-btn:hover {
+    background-color: rgba(128, 128, 128, 0.15);
+}
+
+.editor-action-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ---  END EDITOR FLOATING ACTIONS ---- */
+
+
+
+/* --- GLYPHS VIEWER SECTION HEADER --- */
+.glyph-section-header {
+    position: absolute;
+    width: calc(100% - 24px);
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background-color: transparent;
+    color: var(--color-text-light);
+    font-size: 12px;
+    font-weight: 400;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 0px solid transparent;
+}
+
+.glyph-section-header:hover {
+    /*background-color: var(--color-border);*/
+}
+
+.glyph-section-header svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--color-text-light);
+    stroke-width: 2;
+    margin-right: 8px;
+    transition: transform 0.2s ease-in-out;
+}
+
+.glyph-section-header.is-collapsed svg {
+    transform: rotate(-90deg);
+}
+
+/*----- GLYPHS VIEWER SECTION HEADER ------*/
+
+/* --- GLYPHS VIEWER FONT PREVIEW --- */
+#fontPreviewContainer {
+    flex: 1 1 0; /* Forma abreviada de grow:1, shrink:1, basis:0. La forma más robusta de llenar espacio. */
+    min-width: 0; /* Permite que el contenedor se encoja correctamente */
+    height: 50%;
+    
+    /* Convertir el propio contenedor en un flexbox para centrar la imagen */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+     margin-right: 14%;
+    padding-top: 2px;
+    padding-bottom: 2px;
+     
+}
+
+/* Estilo para la imagen SVG que estará dentro del contenedor */
+#fontPreviewContainer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; /* Equivalente a background-size: contain */
+      
+    
+}
+
+/*--------------------------------------*/

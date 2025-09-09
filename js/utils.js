@@ -29,8 +29,8 @@ function bringToFront(modalElement) {
 
 /**
  * Makes a modal element draggable by its header.
+ * [MODIFIED] Now neutralizes CSS transform on drag start to prevent positioning conflicts.
  * @param {HTMLElement} modalElement - The modal element to make draggable.
- * @returns {void}
  */
 function makeDraggable(modalElement) {
     const header = modalElement.querySelector('.modal-header, .color-picker-header, .material-modal-header, .url-modal-header');
@@ -49,6 +49,12 @@ function makeDraggable(modalElement) {
 
         isDragging = true;
         modalElement.dataset.dragged = "true";
+        
+       
+        // Neutralize the transform property to let top/left positioning work correctly.
+        modalElement.style.transform = 'none';
+       
+
         offset.x = e.clientX - modalElement.offsetLeft;
         offset.y = e.clientY - modalElement.offsetTop;
 
@@ -61,7 +67,7 @@ function makeDraggable(modalElement) {
         if (!isDragging) return;
         let newLeft = e.clientX - offset.x;
         let newTop = e.clientY - offset.y;
-        const margin = 10;
+        const margin = 5;
         const minX = margin;
         const minY = margin;
         const maxX = window.innerWidth - modalElement.offsetWidth - margin;
@@ -136,41 +142,77 @@ function setupModalResize(modalElement) {
  * @param {HTMLElement} [triggerElement] - The element that opened the modal, for relative positioning.
  * @returns {void}
  */
-function positionModal(modalElement, triggerElement) {
-    // Make the modal temporarily visible to measure it
+function positionModal(modalElement, triggerElement, options = {}) {
+    // --- Options and Default Values ---
+    const defaults = {
+        centerX: false,
+        centerY: false,
+        offsetX: 0,
+        offsetY: 8, // The original value of 8 is now the default.
+        cover: false
+    };
+    // Combine user options with default values.
+    const settings = { ...defaults, ...options };
+
+
+    // --- Element Measurement ---
+    // Temporarily make the modal visible to measure it correctly.
     const originalVisibility = modalElement.style.visibility;
     const originalDisplay = modalElement.style.display;
 
     modalElement.style.visibility = 'hidden';
-    modalElement.style.display = 'block'; // Use 'block' for consistent measurement
+    modalElement.style.display = 'block';
     const modalRect = modalElement.getBoundingClientRect();
     
-    // --- LÍNEA CORREGIDA ---
-    // Restore original styles instead of forcing display:none
+    // Restore the original styles.
     modalElement.style.display = originalDisplay;
     modalElement.style.visibility = originalVisibility;
-    // -------------------------
+    
 
+    // --- Positioning Logic ---
     let top, left;
 
+    // If the element has been dragged by the user, don't reposition it.
     if (modalElement.dataset.dragged) {
-        // If dragged before, keep its last position
         return; 
     }
     
     if (triggerElement) {
-        // Position relative to the button that opened it
+        // --- Position Relative to the Trigger ---
         const triggerRect = triggerElement.getBoundingClientRect();
-        top = triggerRect.bottom + 8;
-        left = triggerRect.left;
+
+        // VERTICAL calculation (top)
+        if (settings.cover) {
+            // 'cover' option: align the modal's top with the trigger's top.
+            top = triggerRect.top + settings.offsetY;
+        } else {
+            // Default behavior: position the modal below the trigger.
+            top = triggerRect.bottom + settings.offsetY;
+        }
+
+        // HORIZONTAL calculation (left)
+        left = triggerRect.left + settings.offsetX;
+
     } else {
-        // Default to the center of the screen
+        // --- Default Behavior (no trigger) ---
+        // Center the modal on both axes in the middle of the screen.
         top = (window.innerHeight / 2) - (modalRect.height / 2);
         left = (window.innerWidth / 2) - (modalRect.width / 2);
     }
 
-    // Ensure it doesn't render off-screen
-    const margin = 10;
+    // --- Centering Adjustments (Optional) ---
+    // If specified, these calculations will override the previous ones for their respective axis.
+    if (settings.centerX) {
+        left = (window.innerWidth / 2) - (modalRect.width / 2) + settings.offsetX;
+    }
+    if (settings.centerY) {
+        top = (window.innerHeight / 2) - (modalRect.height / 2) + settings.offsetY;
+    }
+
+
+    // --- Overflow Prevention ---
+    // Ensure the modal does not render off-screen.
+    const margin = 5;
     if (left + modalRect.width > window.innerWidth) {
         left = window.innerWidth - modalRect.width - margin;
     }
@@ -180,10 +222,11 @@ function positionModal(modalElement, triggerElement) {
     if (left < margin) left = margin;
     if (top < margin) top = margin;
 
+
+    // --- Final Style Application ---
     modalElement.style.top = `${top}px`;
     modalElement.style.left = `${left}px`;
 }
-
 
 //----------------------------------------> END [UI COMPONENTS]
 
@@ -256,6 +299,7 @@ function hideConfirmationModal() {
     const overlay = document.getElementById('confirmation-modal-overlay');
     overlay.style.display = 'none';
 }
+
 //----------------------------------------> END [MODAL & TOAST NOTIFICATIONS]
 
 
@@ -372,7 +416,30 @@ function positionTooltip(target, tooltip) {
     
     tooltip.style.top = `${top}px`;
     tooltip.style.left = `${left}px`;
-    tooltip.className = `dynamic-tooltip tooltip-${pos}`;
+    
+    // **LA CORRECCIÓN**: Se usa classList para no eliminar la clase '.show'
+    tooltip.classList.remove('tooltip-top', 'tooltip-bottom', 'tooltip-left', 'tooltip-right');
+    tooltip.classList.add(`tooltip-${pos}`);
+}
+
+/**
+ * Updates the content of the currently visible tooltip, if there is one.
+ * @param {HTMLElement} targetElement - The element whose tooltip needs an update.
+ */
+function updateActiveTooltip(targetElement) {
+    // Si no hay un tooltip visible en el DOM, no hace nada
+    if (!tooltipElement || !document.body.contains(tooltipElement)) {
+        return;
+    }
+
+    const newTooltipText = targetElement.getAttribute('data-tooltip');
+    if (newTooltipText && tooltipElement.firstChild) {
+        // Actualiza solo el nodo de texto para no dañar la flecha
+        tooltipElement.firstChild.nodeValue = newTooltipText;
+        
+        // Vuelve a posicionar el tooltip, ya que su tamaño pudo haber cambiado
+        positionTooltip(targetElement, tooltipElement);
+    }
 }
 //----------------------------------------> END [DYNAMIC TOOLTIP SYSTEM]
 
@@ -442,8 +509,72 @@ function truncateText(text, maxLength = 150) {
             <a href="#" class="show-less-link">show less</a>
         </span>`;
 }
+
+/**
+ * Truncates a full URL in the middle, showing the start of the domain and the file extension.
+ * @param {string} url The full URL.
+ * @param {number} [maxLength=20] The maximum length before truncating.
+ * @returns {string} The truncated URL or an empty string.
+ */
+function truncateUrl(url, maxLength = 20) {
+    if (!url || url.length <= maxLength) return url || '';
+    
+    const startLength = 13;
+    const endLength = 4;
+    const separator = '...';
+
+    if (startLength + endLength + separator.length >= url.length) {
+        return url;
+    }
+
+    const start = url.substring(0, startLength);
+    const end = url.substring(url.length - endLength);
+    return `${start}${separator}${end}`;
+}
 //----------------------------------------> END [TEXT & DATA FORMATTING]
 
+
+//-------------- info modal --------
+
+/**
+ * [MODIFIED] Displays a generic informational modal.
+ * Now uses positionModal to programmatically center itself.
+ * @param {object} config - Configuration object for the modal.
+ * @param {string} config.title - The title of the modal.
+ * @param {string} config.html - The HTML content to display in the modal body.
+ */
+function showInfoModal(config) {
+    const { title, html } = config;
+    const overlay = document.getElementById('info-modal-overlay');
+    const modal = document.getElementById('infoModal');
+    const titleEl = document.getElementById('info-modal-title');
+    const contentEl = document.getElementById('info-modal-content');
+
+    if (!overlay || !modal || !titleEl || !contentEl) return;
+
+    titleEl.textContent = title || 'Information';
+    contentEl.innerHTML = html || '<p>No details provided.</p>';
+    
+    overlay.style.display = 'block';
+    
+    // Position the modal in the center of the screen before showing it.
+    positionModal(modal, null, { centerX: true, centerY: true });
+    
+    modal.style.display = 'flex';
+    bringToFront(modal);
+}
+
+/**
+ * [NEW] Hides the generic informational modal.
+ */
+function hideInfoModal() {
+    const overlay = document.getElementById('info-modal-overlay');
+    const modal = document.getElementById('infoModal');
+    if (overlay) overlay.style.display = 'none';
+    if (modal) modal.style.display = 'none';
+}
+
+//-------------------------------------END [info modal]
  
 
 export {
@@ -454,9 +585,13 @@ export {
     showConfirmationModal,
     hideConfirmationModal,
     initSmartTooltips,
+    updateActiveTooltip,
     formatBytes,
     formatLabelKey,
     linkify,
     truncateText,
-    positionModal
+    truncateUrl,
+    positionModal,
+    showInfoModal,
+    hideInfoModal
 };

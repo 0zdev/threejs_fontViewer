@@ -5,9 +5,9 @@
  * Author: @lewopxd
  *
  * Description:
- * This is the main entry point for the application. It imports all
- * modules, manages the global application state, initializes all
- * components, and wires up event handlers.
+ * This is the main entry point and orchestrator for the application. It imports
+ * all modules, manages the global application state, initializes all components,
+ * and delegates UI updates to the ui-manager.
  */
 
 import * as Editor from './editor-config.js';
@@ -17,38 +17,49 @@ import * as FontManager from './font-manager.js';
 import * as Viewer from './viewer-bridge.js';
 import * as Versioner from './three-versioner.js';
 import * as GlyphViewer from './glyph-viewer.js';
-
-
+import * as FontPreviewer from './font-previewer.js';
 
 //-------------------------------------------------------------
 //-------------------[   APPLICATION STATE   ]-----------------
 //-------------------------------------------------------------
 
-const default_threejs_version = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+// Al inicio de js/main.js
+
+const default_version_string = 'r128';
+const default_threejs_version_url = `https://cdnjs.cloudflare.com/ajax/libs/three.js/${default_version_string}/three.min.js`;
+let glyphSorterWorker = null;
+let sortedGlyphMaps = {};
 
 let AppState = {
     inAppFonts: {},
     currentFontID: null,
     isEditing: false,
     editingBuffer: "",
+    isGlyphSortActive: true,
+    fontDataHasChanged: true,
     viewerState: {
         panEnabled: false,
         zoomEnabled: true,
         is3D: true,
-        gridVisible: true, 
+        gridVisible: true,
         rotationEnabled: true,
         rotateObjectEnabled: true,
         moveObjectEnabled: false,
         rotateCameraEnabled: false,
         isWireframeModeActive: false,
-        savedViewState: null, // This will be used by the PARENT to save its button states
+        isBoundingBoxVisible: false,
+        savedViewState: null,
         currentColor: '#0077fe',
         currentAlpha: 1.0,
         currentMaterialName: 'Phong'
     }
-    
 };
 let isProgrammaticEdit = false;
+
+
+
+
+
 
 //----------------------------------------> END [APPLICATION STATE]
 
@@ -81,12 +92,7 @@ function selectFont(fontID) {
     }
 }
 
-/**
- * Internal function to switch the current font, set it in the editor,
- * and render it in the viewer with a position reset but without framing.
- * @param {string} fontID - The ID of the font to make current.
- */
-function _setCurrentFont(fontID) {
+function _setCurrentFont(fontID, isInitialLoad = false) {
     if (!AppState.inAppFonts[fontID]) {
         console.error(`Font with ID ${fontID} not found in AppState.`);
         return;
@@ -94,22 +100,29 @@ function _setCurrentFont(fontID) {
     AppState.currentFontID = fontID;
     AppState.isEditing = false;
     AppState.editingBuffer = "";
+    AppState.fontDataHasChanged = true;
 
     const fontData = AppState.inAppFonts[fontID].data;
+    const editor = Editor.getEditorInstance();
 
     isProgrammaticEdit = true;
-    Editor.getEditorInstance().setValue(JSON.stringify(fontData, null, 2));
+    editor.setValue(JSON.stringify(fontData, null, 2));
     isProgrammaticEdit = false;
-    Editor.getEditorInstance().clearHistory();
+    editor.clearHistory();
+    editor.setOption('readOnly', true);
 
+    const uiState = isInitialLoad ? 'initialLoad' : 'fontSelected';
+    UI.updateUI(uiState, { appState: AppState });
 
-    _syncParentUI();
-    
-    // On initial font load, explicitly reset its position but DO NOT frame the camera,
-    // to respect the original default camera view.
-    updateViewer({ shouldResetPosition: true, shouldFrame: false });
+    updateViewer({ shouldResetPosition: false, shouldFrame: false });
+    // FontManager.analyzeCurrentFont(fontData); // Consider adding a dedicated analyzer module
 
-    FontManager.analyzeCurrentFont(fontData)
+    if (glyphSorterWorker && fontData.glyphs && !sortedGlyphMaps[fontID]) {
+        glyphSorterWorker.postMessage({
+            fontKey: fontID,
+            glyphs: fontData.glyphs
+        });
+    }
 }
 
 function addFont(fontObject, customID = null) {
@@ -123,20 +136,38 @@ function addFont(fontObject, customID = null) {
         url: fontObject.url || null,
         isFallback: fontObject.isFallback || false
     };
+
+    UI.updateUI('fontAdded', { appState: AppState });
     return fontID;
+}
+
+function startEditing() {
+    const editor = Editor.getEditorInstance();
+    if (!editor) return;
+    AppState.isEditing = true;
+    AppState.editingBuffer = editor.getValue();
+    editor.setOption('readOnly', false);
+    editor.focus();
+    UI.updateUI('editingStateChanged', { appState: AppState });
 }
 
 function _saveChanges() {
     if (!AppState.isEditing || !AppState.currentFontID) return;
     try {
         const updatedFontData = JSON.parse(AppState.editingBuffer);
-        AppState.inAppFonts[AppState.currentFontID].data = updatedFontData;
+        const font = AppState.inAppFonts[AppState.currentFontID];
+
+        font.data = updatedFontData;
+        font.fontName = FontManager.get_font_FullName(updatedFontData, font.name);
+
         AppState.isEditing = false;
         AppState.editingBuffer = "";
-        Utils.showToastMessage(`${AppState.inAppFonts[AppState.currentFontID].fontName} saved.`);
-        _syncParentUI();        
-        FontManager.analyzeCurrentFont(updatedFontData)
+        AppState.fontDataHasChanged = true;
+        Editor.getEditorInstance().setOption('readOnly', true);
 
+        UI.updateUI('fontSaved', { appState: AppState });
+        // FontManager.analyzeCurrentFont(updatedFontData);
+        Utils.showToastMessage(`${font.fontName} saved.`);
     } catch (error) {
         UI.handle_error(error, { openConsole: true });
     }
@@ -145,31 +176,66 @@ function _saveChanges() {
 function _discardChanges() {
     if (!AppState.isEditing || !AppState.currentFontID) return;
     const fontData = AppState.inAppFonts[AppState.currentFontID].data;
-    Editor.getEditorInstance().setValue(JSON.stringify(fontData, null, 2));
+    const editor = Editor.getEditorInstance();
+    isProgrammaticEdit = true;
+    editor.setValue(JSON.stringify(fontData, null, 2));
+    isProgrammaticEdit = false;
+    editor.setOption('readOnly', true);
     AppState.isEditing = false;
     AppState.editingBuffer = "";
     Utils.showToastMessage("Changes discarded.");
-    _syncParentUI();
+    UI.updateUI('editingStateChanged', { appState: AppState });
 }
 
 function _onEditorChange() {
-    if(isProgrammaticEdit){
-        return;
-    }  
+    if (isProgrammaticEdit) return;
+    if (!AppState.isEditing) {
+        AppState.isEditing = true;
+        UI.updateUI('editingStateChanged', { appState: AppState });
+    }
 
-    if (Editor.getEditorInstance().isClean()) return;
-    AppState.isEditing = true;
+    AppState.fontDataHasChanged = true;
     AppState.editingBuffer = Editor.getEditorInstance().getValue();
     liveUpdateViewer();
-    UI.initButtonStates(AppState.viewerState, AppState.isEditing);
 }
 
-function reloadViewerWithState(newUrl) {
+function reloadViewerWithState(newContent) {
     const parentState = {
         ...AppState.viewerState,
         text: document.getElementById('textInput').value
     };
-    Viewer.requestAndReload(newUrl, parentState);
+    // The bridge's requestAndReload function will handle the content.
+    Viewer.requestAndReload(newContent, parentState);
+}
+
+/**
+ * Removes a font from the application state, triggers a subtle UI update,
+ * and selects a default font if the active one was deleted.
+ * @param {string} fontID - The ID of the font to remove.
+ */
+function deleteFont(fontID) {
+    if (AppState.inAppFonts[fontID]) {
+        const wasActive = AppState.currentFontID === fontID;
+
+        // 1. Remove from state
+        delete AppState.inAppFonts[fontID];
+
+        // 2. Trigger subtle DOM removal
+        UI.updateUI('fontRemoved', { appState: AppState, removedFontID: fontID });
+
+        // 3. If the active font was deleted, select the default one
+        if (wasActive) {
+            // Use a reliable default key. 'helvetiker_regular' is a good candidate.
+            const defaultFontKey = 'helvetiker_regular';
+            if (AppState.inAppFonts[defaultFontKey]) {
+                selectFont(defaultFontKey);
+            } else {
+                // Fallback if the default is somehow missing
+                const firstKey = Object.keys(AppState.inAppFonts)[0];
+                if (firstKey) selectFont(firstKey);
+            }
+        }
+    }
 }
 
 //----------------------------------------> END [STATE MUTATIONS]
@@ -179,57 +245,56 @@ function reloadViewerWithState(newUrl) {
 //---------------------[   CORE LOGIC & RENDER   ]-------------
 //-------------------------------------------------------------
 
-function _syncParentUI() {
-    UI.initButtonStates(AppState.viewerState, AppState.isEditing);
-    FontManager.updateUI(AppState.inAppFonts, AppState.currentFontID);
-    updateGlyphViewerIfActive();
-}
-
 function updateViewer(options = {}) {
     const { shouldFrame: frameOption = false, shouldResetPosition: resetOption = false } = options;
     if (!AppState.currentFontID) return;
 
     try {
-        const fontSourceString = AppState.isEditing ? AppState.editingBuffer : JSON.stringify(AppState.inAppFonts[AppState.currentFontID].data);
-        const fontData = JSON.parse(fontSourceString);
         const textInput = document.getElementById('textInput').value;
+        const fontSourceString = AppState.isEditing ? AppState.editingBuffer : JSON.stringify(AppState.inAppFonts[AppState.currentFontID].data);
         const finalShouldFrame = frameOption || AppState.viewerState.isWireframeModeActive;
+
+        const fontDataToSend = AppState.fontDataHasChanged ? JSON.parse(fontSourceString) : null;
 
         if (!textInput) {
             Viewer.update({ text: '' });
             return;
         }
 
-         const fontName = AppState.inAppFonts[AppState.currentFontID]?.fontName || 'current font';
-        if (!validateTextGlyphs(textInput, fontData, fontName)) {
-            return;  
+        const fontForValidation = fontDataToSend || AppState.inAppFonts[AppState.currentFontID].data;
+        const fontName = AppState.inAppFonts[AppState.currentFontID]?.fontName || 'current font';
+
+        if (!validateTextGlyphs(textInput, fontForValidation, fontName)) {
+            return;
         }
-      
 
         Viewer.update({
-            fontData: fontData,
+            fontData: fontDataToSend,
             text: textInput,
             is3D: AppState.viewerState.is3D,
             shouldFrame: finalShouldFrame,
-            shouldResetPosition: resetOption
+            shouldResetPosition: resetOption,
+            fontHasChanged: AppState.fontDataHasChanged
         });
+
+        AppState.fontDataHasChanged = false;
+
     } catch (error) {
+        AppState.fontDataHasChanged = false;
         UI.handle_error(error, { openConsole: true });
     }
 }
 
- 
- 
 function validateTextGlyphs(text, fontData, fontName) {
     const availableGlyphs = fontData.glyphs || {};
     for (const char of text) {
         if (!availableGlyphs.hasOwnProperty(char)) {
             const warningMessage = `THREE.Font: character "${char}" does not exist in font family ${fontName}.`;
-            UI.logToConsole([warningMessage], true); // true para estilo de error
-            return false; // Detiene la validación y retorna false
+            UI.logToConsole([warningMessage], true);
+            return false;
         }
     }
-    return true;  
+    return true;
 }
 
 function liveUpdateViewer() {
@@ -242,12 +307,14 @@ function liveUpdateViewer() {
 function updateGlyphViewerIfActive() {
     if (document.getElementById('glyphs-view').classList.contains('active')) {
         const font = AppState.inAppFonts[AppState.currentFontID];
-        if (font) {
-            GlyphViewer.render(font.data, window.handleGlyphClick);
+        const glyphMap = sortedGlyphMaps[AppState.currentFontID];
+        if (font && glyphMap) {
+            GlyphViewer.render(font.data, glyphMap, AppState.isGlyphSortActive, window.handleGlyphClick, window.handleCategoryToggle);
+        } else if (font) {
+            GlyphViewer.render(font.data, null, false, window.handleGlyphClick, null);
         }
     }
 }
-
 //----------------------------------------> END [CORE LOGIC & RENDER]
 
 
@@ -255,14 +322,62 @@ function updateGlyphViewerIfActive() {
 //---------------------[   INITIALIZATION   ]------------------
 //-------------------------------------------------------------
 
+function initGlyphSorterWorker() {
+    try {
+        glyphSorterWorker = new Worker('./js/workers/glyph-sorter.js');
+        glyphSorterWorker.onmessage = function (e) {
+            const { fontKey, glyphMap, error } = e.data;
+            if (error) {
+                console.error(`[GlyphSorter Worker] Error for font ${fontKey}:`, error);
+                return;
+            }
+            if (fontKey && glyphMap) {
+                glyphMap.categorizedOrder.forEach(category => {
+                    category.isCollapsed = false;
+                });
+                sortedGlyphMaps[fontKey] = glyphMap;
+                updateGlyphViewerIfActive();
+            }
+        };
+        glyphSorterWorker.onerror = (err) => console.error("Error in GlyphSorter Worker:", err);
+    } catch (error) {
+        console.error("Failed to initialize the GlyphSorter Worker.", error);
+    }
+}
+
 function initializeApp() {
+    const stateManager = { addFont, selectFont, deleteFont, getState: () => AppState };
     Editor.initEditor('editor', _onEditorChange);
+    initGlyphSorterWorker();
+    window.hideInfoModal = Utils.hideInfoModal;
+    
     UI.initUIManager({
-        onThemeChange: (newTheme) => { Viewer.updateTheme(newTheme); updateGlyphViewerIfActive(); },
+        stateManager: stateManager,
+        fontPreviewer: FontPreviewer,
+        glyphViewer: GlyphViewer,
+        utils: Utils, // <-- [CORRECTION] Pass the imported Utils module as a dependency.
+        onCopyFontUrl: FontManager.copyFontUrl,
+        onDeleteUserFont: FontManager.deleteUserFont,
+        onThemeChange: (newTheme) => {
+            Viewer.updateTheme(newTheme);
+            const newColor = window.getComputedStyle(document.body).getPropertyValue('--color-text-preview').trim();
+            UI.updateUI('themeChanged', { appState: AppState, newColor });
+        },
         onTabSwitch: (tabName) => {
-            if (tabName === 'info' || tabName === 'glyphs') {
-                FontManager.updateUI(AppState.inAppFonts, AppState.currentFontID);
-                if (tabName === 'glyphs') { updateGlyphViewerIfActive(); }
+
+            if (tabName === 'info') {
+                UI.updateUI('fontSelected', { appState: AppState });
+            }
+            if (tabName === 'glyphs') {
+                UI.updateUI('fontSelected', { appState: AppState });
+                updateGlyphViewerIfActive();
+            }
+            if (tabName === 'editor') {
+
+                const editor = Editor.getEditorInstance();
+                if (editor) {
+                    setTimeout(() => editor.refresh(), 1);
+                }
             }
         },
         onColorChange: (color, alpha) => {
@@ -273,30 +388,33 @@ function initializeApp() {
         onMaterialSelect: (materialName) => {
             AppState.viewerState.currentMaterialName = materialName;
             Viewer.setMaterial(materialName);
+        },
+        onResizeEnd: () => {
+            if (document.getElementById('glyphs-view').classList.contains('active')) {
+                GlyphViewer.measureAndRender();
+            }
         }
     });
 
-    // 1. INICIALIZACIÓN DE MÓDULOS (UNA SOLA VEZ)
-    // Estos módulos ahora se inicializan aquí, una única vez al cargar la app.
     FontManager.initFontManager({
-        stateManager: { addFont, selectFont },
-        ui: UI,
-        utils: Utils
-    }, (initialFontID) => { _setCurrentFont(initialFontID); });
-    
+        stateManager: stateManager,
+        ui: UI
+    }, (initialFontID) => { _setCurrentFont(initialFontID, true); });
+
     Versioner.initThreeVersioner({
         ui: UI,
         utils: Utils,
         viewer: { reloadWithState: reloadViewerWithState }
     });
 
-    // 2. INICIALIZACIÓN DEL BRIDGE CON UN CALLBACK SIMPLIFICADO
-    // El callback ahora solo ejecuta tareas de sincronización.
-     Viewer.initViewerBridge({ ui: UI, fontManager: FontManager }, () => {
-        _syncParentUI();
+    Viewer.initViewerBridge({ ui: UI, fontManager: FontManager }, () => {
+        UI.updateUI('initialLoad', { appState: AppState });
     });
 
-    Viewer.reloadViewerWithVersion(default_threejs_version);
+
+    const initialHtml = Versioner.generateInitialIframeHtml(default_threejs_version_url);
+    Viewer.reloadViewerWithVersion(initialHtml);
+    Versioner.setInitialVersion(default_version_string, default_threejs_version_url);
 }
 document.addEventListener('DOMContentLoaded', initializeApp);
 //----------------------------------------> END [INITIALIZATION]
@@ -317,7 +435,7 @@ function setMouseMode(mode) {
         rotateObject: vs.rotateObjectEnabled,
         moveObject: vs.moveObjectEnabled, rotateCamera: vs.rotateCameraEnabled
     });
-    _syncParentUI();
+    UI.updateUI('editingStateChanged', { appState: AppState }); // Re-syncs button states
 }
 
 window.liveUpdateViewer = liveUpdateViewer;
@@ -334,11 +452,21 @@ window.loadFontFromFile = FontManager.loadFontFromFile;
 window.showUrlModal = UI.showUrlModal;
 window.hideUrlModal = UI.hideUrlModal;
 window.loadFontFromUrl = FontManager.loadFontFromUrl;
-window.reloadViewer = () => { Viewer.resetView(); updateViewer({ shouldResetPosition: true }); };
+
+window.reloadViewer = () => {
+    // Reset the internal state and UI buttons first
+    _resetViewerStateToDefault();
+
+    // Then, send the command to the iframe to reset the camera/object
+    Viewer.resetView();
+
+    // Finally, re-render the text mesh in its new default position
+    updateViewer({ shouldResetPosition: true });
+};
 window.copyCardUrl = Versioner.copyCardUrl;
 window.applyThreeJsVersion = Versioner.applyThreeJsVersion;
-window.toggleRotation = () => { AppState.viewerState.rotationEnabled = !AppState.viewerState.rotationEnabled; Viewer.toggleRotation(AppState.viewerState.rotationEnabled); _syncParentUI(); };
-window.toggleGrid = () => { AppState.viewerState.gridVisible = !AppState.viewerState.gridVisible; Viewer.toggleGrid(AppState.viewerState.gridVisible); _syncParentUI(); };
+window.toggleRotation = () => { AppState.viewerState.rotationEnabled = !AppState.viewerState.rotationEnabled; Viewer.toggleRotation(AppState.viewerState.rotationEnabled); UI.updateUI('editingStateChanged', { appState: AppState }); };
+window.toggleGrid = () => { AppState.viewerState.gridVisible = !AppState.viewerState.gridVisible; Viewer.toggleGrid(AppState.viewerState.gridVisible); UI.updateUI('editingStateChanged', { appState: AppState }); };
 window.toggleMode = () => { AppState.viewerState.is3D = !AppState.viewerState.is3D; updateViewer({ shouldResetPosition: true }); };
 window.toggleColorPicker = UI.toggleColorPicker;
 window.toggleMaterialModal = UI.toggleMaterialModal;
@@ -346,47 +474,45 @@ window.toggleConsole = UI.toggleConsole;
 window.toggleVersionModal = Versioner.toggleVersionModal;
 window.copyFontUrl = FontManager.copyFontUrl;
 window.clearConsole = UI.clearConsole;
-    
+window.startEditing = startEditing;
+
+window.toggleGlyphSort = () => {
+    AppState.isGlyphSortActive = !AppState.isGlyphSortActive;
+    const sortBtn = document.getElementById('sortGlyphsBtn');
+    sortBtn.classList.toggle('active', AppState.isGlyphSortActive);
+    const newTooltipText = AppState.isGlyphSortActive ? 'Show original order' : 'Sort by common chars';
+    sortBtn.setAttribute('data-tooltip', newTooltipText);
+    Utils.updateActiveTooltip(sortBtn);
+    updateGlyphViewerIfActive();
+};
+
+window.handleCategoryToggle = (categoryName) => {
+    const glyphMap = sortedGlyphMaps[AppState.currentFontID];
+    if (!glyphMap || !glyphMap.categorizedOrder) return;
+    const category = glyphMap.categorizedOrder.find(cat => cat.name === categoryName);
+    if (category) {
+        category.isCollapsed = !category.isCollapsed;
+        updateGlyphViewerIfActive();
+    }
+};
+
 window.toggleWireframeView = () => {
     const vs = AppState.viewerState;
-    
-    // The state is now toggled AFTER the save/restore logic is complete.
     const newActiveState = !vs.isWireframeModeActive;
-
     if (newActiveState) {
-        // --- ACTIVATING ---
-        // 1. Save a clean snapshot of the CURRENT state BEFORE any changes.
         const stateToSave = { ...vs };
         delete stateToSave.savedViewState;
         vs.savedViewState = stateToSave;
-
-        // 2. Apply the temporary inspection state.
-        vs.panEnabled = true;
-        vs.zoomEnabled = true;
-        vs.is3D = false;
-        vs.gridVisible = false;
-        vs.rotationEnabled = false;
-        vs.rotateObjectEnabled = false;
-        vs.moveObjectEnabled = false;
-        vs.rotateCameraEnabled = false;
-
+        vs.panEnabled = true; vs.zoomEnabled = true; vs.is3D = false; vs.gridVisible = false; vs.rotationEnabled = false; vs.rotateObjectEnabled = false; vs.moveObjectEnabled = false; vs.rotateCameraEnabled = false;
     } else {
-        // --- DEACTIVATING ---
-        // 1. Restore the state from the clean snapshot.
         if (vs.savedViewState) {
             Object.assign(vs, vs.savedViewState);
             vs.savedViewState = null;
         }
     }
-    
-    // 2. NOW, officially update the state flag AFTER all logic is done.
     vs.isWireframeModeActive = newActiveState;
-    
-    // 3. Send the command to the autonomous iframe.
     Viewer.setWireframe(vs.isWireframeModeActive);
-    
-    // 4. Sync the parent UI to reflect the new, stable state.
-    _syncParentUI();
+    UI.updateUI('editingStateChanged', { appState: AppState });
 };
 
 window.togglePan = () => setMouseMode(AppState.viewerState.panEnabled ? '' : 'pan');
@@ -395,4 +521,71 @@ window.toggleMoveObject = () => setMouseMode(AppState.viewerState.moveObjectEnab
 window.toggleRotateCamera = () => setMouseMode(AppState.viewerState.rotateCameraEnabled ? '' : 'rotateCamera');
 window.toggleZoom = () => { AppState.viewerState.zoomEnabled = !AppState.viewerState.zoomEnabled; setMouseMode(AppState.viewerState.panEnabled ? 'pan' : AppState.viewerState.rotateObjectEnabled ? 'rotateObject' : AppState.viewerState.moveObjectEnabled ? 'moveObject' : AppState.viewerState.rotateCameraEnabled ? 'rotateCamera' : ''); };
 
+window.toggleBoundingBox = () => {
+    const vs = AppState.viewerState;
+    vs.isBoundingBoxVisible = !vs.isBoundingBoxVisible;
+    Viewer.toggleBoundingBox(vs.isBoundingBoxVisible);
+    UI.updateUI('editingStateChanged', { appState: AppState });
+};
 //----------------------------------------> END [GLOBAL EVENT HANDLERS]
+
+
+
+
+
+//-------------------------------------------------------------
+//----------------------[   Helpers   ]------------------------
+//-------------------------------------------------------------
+
+
+
+/**
+ * [MODIFIED] Resets the viewerState object to its default initial values
+ * and sends the updated state to the viewer and UI. Now correctly resets the material.
+ * @private
+ */
+function _resetViewerStateToDefault() {
+    // Define the default state exactly as it is upon application start
+    const defaultState = {
+        panEnabled: false,
+        zoomEnabled: true,
+        is3D: true,
+        gridVisible: true,
+        rotationEnabled: true,
+        rotateObjectEnabled: true,
+        moveObjectEnabled: false,
+        rotateCameraEnabled: false,
+        isWireframeModeActive: false,
+        isBoundingBoxVisible: false,
+        savedViewState: null,
+        currentColor: '#0077fe',
+        currentAlpha: 1.0,
+        currentMaterialName: 'Phong'
+    };
+
+    // Overwrite the current state with the default state
+    AppState.viewerState = { ...defaultState };
+
+    // Synchronize the viewer iframe with the new state
+    Viewer.toggleGrid(AppState.viewerState.gridVisible);
+    Viewer.toggleRotation(AppState.viewerState.rotationEnabled);
+    Viewer.setMouseState({
+        pan: AppState.viewerState.panEnabled,
+        zoom: AppState.viewerState.zoomEnabled,
+        rotateObject: AppState.viewerState.rotateObjectEnabled,
+        moveObject: AppState.viewerState.moveObjectEnabled,
+        rotateCamera: AppState.viewerState.rotateCameraEnabled
+    });
+
+    // [FIX] Send the command to reset the material in the viewer
+    Viewer.setMaterial(AppState.viewerState.currentMaterialName);
+
+    // [FIX] Update the UI to reflect the new active material
+    UI.updateActiveMaterial(AppState.viewerState.currentMaterialName);
+
+    // Update the UI buttons to reflect the reset state
+    UI.updateUI('viewerStateChanged', { appState: AppState });
+}
+
+
+//----------------------------------------------------------> END [HELPERS]

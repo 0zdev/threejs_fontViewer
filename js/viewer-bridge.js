@@ -105,31 +105,23 @@ function sendViewerMessage(command, args = {}) {
  
 }
 
-/**
- * Step 1 of the reload handshake, initiated by the parent orchestrator (main.js).
- * @param {string} newUrl - The URL of the new Three.js version.
- * @param {object} parentState - The UI state owned by the parent (AppState.viewerState).
- */
-function requestAndReload(newUrl, parentState) {
-    pendingReloadUrl = newUrl;
+ 
+function requestAndReload(newContent, parentState) {
+    pendingReloadUrl = newContent; // The variable now holds the HTML string
     const iframe = document.getElementById('viewer-iframe');
     if (iframe && iframe.contentWindow) {
-        // Step 2: Ask the current iframe for its part of the state (camera/pivot).
-        // We pass the parentState along so it comes back in the response.
         iframe.contentWindow.postMessage({ command: 'requestViewerState', args: { parentState } }, '*');
     }
 }
 
-/**
- * Sends font data and text to the viewer for rendering.
- */
-function update({ fontData, text, is3D, shouldFrame, shouldResetPosition }) {  
+function update({ fontData, text, is3D, shouldFrame, shouldResetPosition, fontHasChanged }) {  
     sendViewerMessage('update', { 
         fontData, 
         text, 
         is3D, 
         shouldFrame, 
-        shouldResetPosition  
+        shouldResetPosition,
+        fontHasChanged  
     });
 }
 
@@ -190,6 +182,13 @@ function setWireframe(active) {
 }
 
 /**
+ * Toggles the visibility of the text's bounding box.
+ */
+function toggleBoundingBox(visible) {
+    sendViewerMessage('toggleBoundingBox', { visible });
+}
+
+/**
  * Sends a previously saved state to the viewer for restoration.
  */
 function restoreState(stateToRestore) {
@@ -209,33 +208,25 @@ function fontDataForRestore(fontData) {
 //-------------------[   IFRAME MANAGEMENT   ]-----------------
 //-------------------------------------------------------------
 
+//-------------------------------------------------------------
+//-------------------[   IFRAME MANAGEMENT   ]-----------------
+//-------------------------------------------------------------
+
 /**
- * Reloads the viewer iframe, injecting a specific version of Three.js.
- * @param {string} versionUrl - The full URL to the Three.js script.
+ * [MODIFIED] Reloads the viewer iframe with pre-generated HTML content.
+ * Its responsibility is now only to set the srcdoc attribute.
+ * @param {string} generatedHtml - The full HTML content string for the iframe.
  */
-function reloadViewerWithVersion(versionUrl) {
+function reloadViewerWithVersion(generatedHtml) {
     const iframe = document.getElementById('viewer-iframe');
-    const viewerHtmlPath = './viewer/viewer.html';
-    isViewerReady = false;
-
-    fetch(viewerHtmlPath)
-        .then(response => {
-            if (!response.ok) throw new Error(`Failed to load viewer HTML: ${response.statusText}`);
-            return response.text();
-        })
-        .then(htmlContent => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlContent, 'text/html');
-
-            const threejsScript = doc.getElementById('viewer-script-threejs-url');
-            if (threejsScript) {
-                threejsScript.src = versionUrl;
-            }
-
-            const newIframeContent = `<!DOCTYPE html>${doc.documentElement.outerHTML}`;
-            iframe.srcdoc = newIframeContent;
-        })
-        .catch(error => dependencies.ui.handle_error(error, { openConsole: true }));
+    isViewerReady = false; // Reset the ready flag for the new content
+    
+    if (iframe) {
+        iframe.srcdoc = generatedHtml;
+    } else {
+        // This case should not happen in normal operation, but it's good practice to handle it.
+        dependencies.ui.handle_error(new Error("Viewer iframe not found in DOM."), { openConsole: true });
+    }
 }
 //----------------------------------------> END [IFRAME MANAGEMENT]
 
@@ -254,5 +245,6 @@ export {
     resetView,
     updateTheme,
     setMouseState,
-    setWireframe
+    setWireframe,
+    toggleBoundingBox
 };
