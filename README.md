@@ -2,7 +2,7 @@
 
 # three.js Font viewer online
 
-### Go to:   [https://threejsfontviewer.github.io/threejs_fontViewer/](https://threejsfontviewer.github.io/threejs_fontViewer/)
+### Go to:   https://0zdev.github.io/threejs_fontViewer/
 
 A web-based design and debugging tool to visualize, edit, and optimize typeface files for **three.js 3D text geometry**.
 
@@ -17,4 +17,5 @@ Load, live-edit, and save JSON or TTF fonts directly in your browser, fast tool 
 * ✓ Convert TTF to JSON
 * ✓ Test Different Versions
 * ✓ Optimize fonts
+
 
